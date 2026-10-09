@@ -4,7 +4,7 @@ Status: implemented on `rag`. This document records the design. Integration deta
 
 This plan applies to the existing `rag` branch. The starting app contains the generated Compose screen.
 
-The first result is a local chat screen. A question returns an answer, reference chunks, filenames, and page numbers. 
+The first result is a local chat screen. A question returns an answer, reference chunks, filenames, and page numbers.
 
 The reference specifies keyword retrieval with SQLite FTS4. The proposal therefore uses dummy document text rather than simulated semantic vectors.
 Real documents replace the dummy source through one interface. The chat screen and pipeline remain the same.
