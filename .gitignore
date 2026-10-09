@@ -13,3 +13,7 @@
 .externalNativeBuild
 .cxx
 local.properties
+/build-rag.log
+*.litertlm
+/app/src/models/
+/app/src/main/assets/
