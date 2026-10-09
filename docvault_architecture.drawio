@@ -1,0 +1,180 @@
+<mxfile host="app.diagrams.net" modified="2026-10-09T10:45:00.000Z" agent="Antigravity" version="24.7.5">
+  <diagram id="docvault-flow" name="DocVault System Flow">
+    <mxGraphModel dx="1400" dy="850" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1300" pageHeight="850" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+
+        <!-- INPUT SOURCES -->
+        <mxCell id="in_scanner" value="&lt;b&gt;DocumentScannerHelper.kt&lt;/b&gt;&lt;br&gt;ML Kit Document Scanner&lt;br&gt;&lt;i&gt;startScan()&lt;/i&gt;" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#000000;fontColor=#000000;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="40" y="60" width="190" height="60" as="geometry" />
+        </mxCell>
+
+        <mxCell id="in_photo" value="&lt;b&gt;Android Photo Picker&lt;/b&gt;&lt;br&gt;&lt;i&gt;PickVisualMedia&lt;/i&gt;" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#000000;fontColor=#000000;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="40" y="150" width="190" height="50" as="geometry" />
+        </mxCell>
+
+        <mxCell id="in_saf" value="&lt;b&gt;Storage Access Framework&lt;/b&gt;&lt;br&gt;&lt;i&gt;OpenDocument (PDF)&lt;/i&gt;" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#000000;fontColor=#000000;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="40" y="230" width="190" height="50" as="geometry" />
+        </mxCell>
+
+        <!-- UI SCREENS -->
+        <mxCell id="ui_vault" value="&lt;b&gt;VaultScreen.kt&lt;/b&gt;&lt;br&gt;Folder list &amp;amp; import buttons&lt;br&gt;&lt;i&gt;triggerScan()&lt;/i&gt;" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#000000;fontColor=#000000;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="290" y="60" width="190" height="60" as="geometry" />
+        </mxCell>
+
+        <mxCell id="ui_save" value="&lt;b&gt;SaveDocumentScreen.kt&lt;/b&gt;&lt;br&gt;Preview, title check, folder pick&lt;br&gt;&lt;i&gt;saveDocument()&lt;/i&gt;" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#000000;fontColor=#000000;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="290" y="170" width="190" height="70" as="geometry" />
+        </mxCell>
+
+        <mxCell id="ui_detail" value="&lt;b&gt;FolderDetailScreen.kt&lt;/b&gt;&lt;br&gt;Document cards list&lt;br&gt;Rename &amp;amp; delete actions" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#000000;fontColor=#000000;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="290" y="320" width="190" height="60" as="geometry" />
+        </mxCell>
+
+        <mxCell id="ui_pdf_view" value="&lt;b&gt;PdfViewerScreen.kt&lt;/b&gt;&lt;br&gt;&lt;i&gt;PdfRenderer.openPage()&lt;/i&gt;&lt;br&gt;Page counter &amp;amp; paging buttons" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#000000;fontColor=#000000;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="290" y="440" width="190" height="60" as="geometry" />
+        </mxCell>
+
+        <mxCell id="ui_img_view" value="&lt;b&gt;ImageViewerScreen.kt&lt;/b&gt;&lt;br&gt;&lt;i&gt;BitmapFactory.decodeFile()&lt;/i&gt;&lt;br&gt;Pinch-to-zoom &amp;amp; pan gestures" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#000000;fontColor=#000000;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="290" y="530" width="190" height="60" as="geometry" />
+        </mxCell>
+
+        <!-- VIEWMODELS & LOGIC -->
+        <mxCell id="vm_save" value="&lt;b&gt;SaveDocumentViewModel.kt&lt;/b&gt;&lt;br&gt;Loads preview bitmap&lt;br&gt;&lt;i&gt;saveDocument()&lt;/i&gt;" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#000000;fontColor=#000000;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="540" y="170" width="200" height="70" as="geometry" />
+        </mxCell>
+
+        <mxCell id="vm_vault" value="&lt;b&gt;VaultViewModel.kt&lt;/b&gt;&lt;br&gt;&lt;b&gt;FolderDetailViewModel.kt&lt;/b&gt;&lt;br&gt;StateFlow document streams" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#000000;fontColor=#000000;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="540" y="320" width="200" height="60" as="geometry" />
+        </mxCell>
+
+        <mxCell id="data_repo" value="&lt;b&gt;VaultRepository.kt&lt;/b&gt;&lt;br&gt;&lt;i&gt;saveDocument()&lt;/i&gt;&lt;br&gt;&lt;i&gt;createFolder()&lt;/i&gt;&lt;br&gt;&lt;i&gt;deleteDocument()&lt;/i&gt;" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#000000;fontColor=#000000;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="800" y="240" width="200" height="80" as="geometry" />
+        </mxCell>
+
+        <mxCell id="data_file_mgr" value="&lt;b&gt;FileStorageManager.kt&lt;/b&gt;&lt;br&gt;&lt;i&gt;copyUriToInternalStorage()&lt;/i&gt;&lt;br&gt;&lt;i&gt;deleteFile()&lt;/i&gt;" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#000000;fontColor=#000000;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="800" y="120" width="200" height="60" as="geometry" />
+        </mxCell>
+
+        <!-- STORAGE -->
+        <mxCell id="store_disk" value="&lt;b&gt;Internal Storage&lt;/b&gt;&lt;br&gt;filesDir/documents/&lt;br&gt;&amp;lt;UUID&amp;gt;.pdf or &amp;lt;UUID&amp;gt;.jpg" style="shape=cylinder3;whiteSpace=wrap;html=1;boundedLbl=1;backgroundOutline=1;size=10;fillColor=#ffffff;strokeColor=#000000;fontColor=#000000;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="1060" y="100" width="180" height="80" as="geometry" />
+        </mxCell>
+
+        <mxCell id="store_db" value="&lt;b&gt;VaultDatabase.kt&lt;/b&gt;&lt;br&gt;&lt;b&gt;VaultDao.kt&lt;/b&gt; (SQLite)&lt;br&gt;Tables: folders, documents" style="shape=cylinder3;whiteSpace=wrap;html=1;boundedLbl=1;backgroundOutline=1;size=10;fillColor=#ffffff;strokeColor=#000000;fontColor=#000000;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="1060" y="240" width="180" height="80" as="geometry" />
+        </mxCell>
+
+        <!-- CONNECTORS / FLOW ARROWS -->
+        <!-- 1. VaultScreen launches scan -->
+        <mxCell id="e1" value="Trigger scan" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#000000;strokeWidth=1;fontSize=10;" edge="1" parent="1" source="ui_vault" target="in_scanner">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <!-- 2. Inputs send Uri to Save Screen -->
+        <mxCell id="e2" value="Uri" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#000000;strokeWidth=1;fontSize=10;" edge="1" parent="1" source="in_scanner" target="ui_save">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="250" y="90" />
+              <mxPoint x="250" y="190" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+
+        <mxCell id="e3" value="Uri" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#000000;strokeWidth=1;fontSize=10;" edge="1" parent="1" source="in_photo" target="ui_save">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="260" y="175" />
+              <mxPoint x="260" y="205" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+
+        <mxCell id="e4" value="Uri" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#000000;strokeWidth=1;fontSize=10;" edge="1" parent="1" source="in_saf" target="ui_save">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="250" y="255" />
+              <mxPoint x="250" y="220" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+
+        <!-- 3. Save Screen to ViewModel & Repo -->
+        <mxCell id="e5" value="Save request" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#000000;strokeWidth=1;fontSize=10;" edge="1" parent="1" source="ui_save" target="vm_save">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <mxCell id="e6" value="Call repository" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#000000;strokeWidth=1;fontSize=10;" edge="1" parent="1" source="vm_save" target="data_repo">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="760" y="205" />
+              <mxPoint x="760" y="260" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+
+        <!-- 4. Atomic Write: File first, DB second -->
+        <mxCell id="e7" value="1. Write file" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#000000;strokeWidth=1;fontSize=10;" edge="1" parent="1" source="data_repo" target="data_file_mgr">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <mxCell id="e8" value="Save bytes" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#000000;strokeWidth=1;fontSize=10;" edge="1" parent="1" source="data_file_mgr" target="store_disk">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <mxCell id="e9" value="2. Insert row" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#000000;strokeWidth=1;fontSize=10;" edge="1" parent="1" source="data_repo" target="store_db">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <!-- 5. Navigation & UI Browse -->
+        <mxCell id="e10" value="Select folder" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#000000;strokeWidth=1;fontSize=10;" edge="1" parent="1" source="ui_vault" target="ui_detail">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <mxCell id="e11" value="Update StateFlow" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#000000;strokeWidth=1;fontSize=10;" edge="1" parent="1" source="ui_detail" target="vm_vault">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <mxCell id="e12" value="Rename / Delete" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#000000;strokeWidth=1;fontSize=10;" edge="1" parent="1" source="vm_vault" target="data_repo">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="760" y="350" />
+              <mxPoint x="760" y="300" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+
+        <!-- 6. Viewers reading storage -->
+        <mxCell id="e13" value="Open PDF" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#000000;strokeWidth=1;fontSize=10;" edge="1" parent="1" source="ui_detail" target="ui_pdf_view">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <mxCell id="e14" value="Open image" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#000000;strokeWidth=1;fontSize=10;" edge="1" parent="1" source="ui_detail" target="ui_img_view">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="270" y="360" />
+              <mxPoint x="270" y="560" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+
+        <mxCell id="e15" value="Read binary file" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#000000;strokeWidth=1;dashed=1;fontSize=10;" edge="1" parent="1" source="store_disk" target="ui_pdf_view">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="1150" y="470" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+
+        <mxCell id="e16" value="Reactive Flow query" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#000000;strokeWidth=1;dashed=1;fontSize=10;" edge="1" parent="1" source="store_db" target="vm_vault">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="1100" y="360" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>
