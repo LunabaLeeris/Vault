@@ -96,7 +96,9 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
+import com.example.vault.R
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -312,7 +314,7 @@ fun VaultScreen(
                     .statusBarsPadding()
                     .padding(bottom = 76.dp)
             ) {
-                // Top Header Row: Bolder Title with Refined Font Size + Light/Dark mode toggle
+                // Top Header Row: Custom Vault Logo + Title + Light/Dark mode toggle
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -320,15 +322,38 @@ fun VaultScreen(
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Text(
-                        text = "Vault",
-                        style = MaterialTheme.typography.titleLarge.copy(
-                            fontFamily = Manrope,
-                            fontWeight = FontWeight.ExtraBold,
-                            fontSize = 22.sp
-                        ),
-                        color = MaterialTheme.colorScheme.onBackground
-                    )
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        Surface(
+                            modifier = Modifier.size(36.dp),
+                            shape = RoundedCornerShape(10.dp),
+                            color = if (isDark) Color(0xFF16251E) else Color(0xFFEAF7F0),
+                            border = BorderStroke(
+                                1.dp,
+                                if (isDark) Color(0x333ECF8E) else Color(0x3316A34A)
+                            )
+                        ) {
+                            Box(contentAlignment = Alignment.Center) {
+                                Image(
+                                    painter = painterResource(id = R.drawable.ic_vault_logo),
+                                    contentDescription = "Vault Logo",
+                                    modifier = Modifier.size(24.dp)
+                                )
+                            }
+                        }
+
+                        Text(
+                            text = "Vault",
+                            style = MaterialTheme.typography.titleLarge.copy(
+                                fontFamily = Manrope,
+                                fontWeight = FontWeight.ExtraBold,
+                                fontSize = 22.sp
+                            ),
+                            color = MaterialTheme.colorScheme.onBackground
+                        )
+                    }
 
                     // Light / Dark Mode Toggle Button
                     Surface(

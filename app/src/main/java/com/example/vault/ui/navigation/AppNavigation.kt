@@ -23,6 +23,7 @@ import com.example.vault.ui.main.MainScreen
 import com.example.vault.ui.vault.FolderDetailScreen
 import com.example.vault.ui.vault.FolderDetailViewModel
 import com.example.vault.ui.vault.VaultViewModel
+import com.example.vault.ui.splash.SplashScreen
 import com.example.vault.ui.viewer.ImageViewerScreen
 import com.example.vault.ui.viewer.PdfViewerScreen
 
@@ -37,7 +38,7 @@ fun AppNavigation(
 
     NavHost(
         navController = navController,
-        startDestination = Screen.Vault.route,
+        startDestination = Screen.Splash.route,
         enterTransition = {
             slideIntoContainer(
                 towards = AnimatedContentTransitionScope.SlideDirection.Start,
@@ -63,6 +64,16 @@ fun AppNavigation(
             ) + fadeOut(animationSpec = tween(260))
         }
     ) {
+        composable(Screen.Splash.route) {
+            SplashScreen(
+                onSplashFinished = {
+                    navController.navigate(Screen.Vault.route) {
+                        popUpTo(Screen.Splash.route) { inclusive = true }
+                    }
+                }
+            )
+        }
+
         composable(Screen.Vault.route) {
             MainScreen(
                 vaultViewModel = vaultViewModel,

@@ -1,6 +1,7 @@
 package com.example.vault.ui.navigation
 
 sealed class Screen(val route: String) {
+    data object Splash : Screen("splash")
     data object Vault : Screen("vault")
     data object Chat : Screen("chat")
 

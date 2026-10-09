@@ -1,0 +1,60 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:aapt="http://schemas.android.com/aapt"
+    android:width="48dp"
+    android:height="48dp"
+    android:viewportWidth="48"
+    android:viewportHeight="48">
+
+    <!-- Outer Vault Safe Body -->
+    <path
+        android:pathData="M15,5 L33,5 C38.52,5 43,9.48 43,15 L43,33 C43,38.52 38.52,43 33,43 L15,43 C9.48,43 5,38.52 5,33 L5,15 C5,9.48 9.48,5 15,5 Z"
+        android:strokeWidth="2.8"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round">
+        <aapt:attr name="android:strokeColor">
+            <gradient
+                android:startX="5"
+                android:startY="5"
+                android:endX="43"
+                android:endY="43"
+                android:type="linear">
+                <item android:offset="0.0" android:color="#3ECF8E" />
+                <item android:offset="1.0" android:color="#059669" />
+            </gradient>
+        </aapt:attr>
+    </path>
+
+    <!-- Circular Vault Dial -->
+    <path
+        android:pathData="M24,14 A10,10 0 1,1 23.99,14 Z"
+        android:strokeWidth="2.2"
+        android:strokeColor="#3ECF8E" />
+
+    <!-- 4 Radial Locking Bolts -->
+    <path
+        android:pathData="M24,5 L24,14 M24,34 L24,43 M5,24 L14,24 M34,24 L43,24"
+        android:strokeWidth="2.4"
+        android:strokeLineCap="round"
+        android:strokeColor="#3ECF8E" />
+
+    <!-- 4 Precision Dial Rivets -->
+    <path
+        android:pathData="M17,17 m-1.2,0 a1.2,1.2 0 1,0 2.4,0 a1.2,1.2 0 1,0 -2.4,0 M31,17 m-1.2,0 a1.2,1.2 0 1,0 2.4,0 a1.2,1.2 0 1,0 -2.4,0 M17,31 m-1.2,0 a1.2,1.2 0 1,0 2.4,0 a1.2,1.2 0 1,0 -2.4,0 M31,31 m-1.2,0 a1.2,1.2 0 1,0 2.4,0 a1.2,1.2 0 1,0 -2.4,0"
+        android:fillColor="#3ECF8E" />
+
+    <!-- Center AI Spark Core -->
+    <path
+        android:pathData="M24,18 C24,21.3 21.3,24 18,24 C21.3,24 24,26.7 24,30 C24,26.7 26.7,24 30,24 C26.7,24 24,21.3 24,18 Z">
+        <aapt:attr name="android:fillColor">
+            <gradient
+                android:startX="18"
+                android:startY="18"
+                android:endX="30"
+                android:endY="30"
+                android:type="linear">
+                <item android:offset="0.0" android:color="#A7F3D0" />
+                <item android:offset="1.0" android:color="#3ECF8E" />
+            </gradient>
+        </aapt:attr>
+    </path>
+</vector>
