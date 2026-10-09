@@ -127,6 +127,7 @@ fun ChatScreen(
     onNavigateToVault: () -> Unit,
     onOpenDocument: (DocumentEntity) -> Unit = {},
     onOpenDrawer: () -> Unit = {},
+    onNavigateToSettings: () -> Unit = {},
     showBottomBar: Boolean = true
 ) {
     val context = LocalContext.current
@@ -212,7 +213,7 @@ fun ChatScreen(
                         when (tabName) {
                             "Vault" -> onNavigateToVault()
                             "Chat" -> { /* Already on Chat */ }
-                            "Settings" -> viewModel.emitToast("Settings screen is coming soon")
+                            "Settings" -> onNavigateToSettings()
                         }
                     }
                 )

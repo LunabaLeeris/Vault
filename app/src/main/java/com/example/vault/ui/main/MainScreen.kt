@@ -39,6 +39,7 @@ import com.example.vault.ui.chat.ChatViewModel
 import com.example.vault.ui.chat.DeleteChatDialog
 import com.example.vault.ui.chat.RenameChatDialog
 import com.example.vault.ui.chat.RightChatDrawer
+import com.example.vault.ui.settings.SettingsScreen
 import com.example.vault.ui.theme.ThemeState
 import com.example.vault.ui.vault.VaultBottomNavigationBar
 import com.example.vault.ui.vault.VaultScreen
@@ -70,7 +71,7 @@ fun MainScreen(
 
     // System Back priority:
     // 1. If drawer is open -> close drawer
-    // 2. If on Chat -> return to Vault
+    // 2. If on Chat or Settings -> return to Vault
     BackHandler(enabled = isChatDrawerOpen) {
         isChatDrawerOpen = false
     }
@@ -93,7 +94,7 @@ fun MainScreen(
                             when (tabName) {
                                 "Vault" -> currentTab = "Vault"
                                 "Chat" -> currentTab = "Chat"
-                                "Settings" -> vaultViewModel.showMessage("Settings screen is coming soon")
+                                "Settings" -> currentTab = "Settings"
                             }
                         }
                     )
@@ -108,12 +109,15 @@ fun MainScreen(
                 AnimatedContent(
                     targetState = currentTab,
                     transitionSpec = {
-                        if (targetState == "Chat") {
+                        val tabOrder = mapOf("Vault" to 0, "Chat" to 1, "Settings" to 2)
+                        val from = tabOrder[initialState] ?: 0
+                        val to = tabOrder[targetState] ?: 0
+                        if (to > from) {
                             (slideInHorizontally(animationSpec = tween(240)) { it } + fadeIn(animationSpec = tween(240)))
                                 .togetherWith(slideOutHorizontally(animationSpec = tween(240)) { -it } + fadeOut(animationSpec = tween(240)))
                         } else {
-                            (slideInHorizontally(animationSpec = tween(250)) { -it } + fadeIn(animationSpec = tween(250)))
-                                .togetherWith(slideOutHorizontally(animationSpec = tween(250)) { it } + fadeOut(animationSpec = tween(250)))
+                            (slideInHorizontally(animationSpec = tween(240)) { -it } + fadeIn(animationSpec = tween(240)))
+                                .togetherWith(slideOutHorizontally(animationSpec = tween(240)) { it } + fadeOut(animationSpec = tween(240)))
                         }
                     },
                     label = "MainTabTransition"
@@ -126,6 +130,7 @@ fun MainScreen(
                                 onStartSaveFlow = onStartSaveFlow,
                                 onOpenDocument = onOpenDocument,
                                 onNavigateToChat = { currentTab = "Chat" },
+                                onNavigateToSettings = { currentTab = "Settings" },
                                 showBottomBar = false
                             )
                         }
@@ -135,7 +140,13 @@ fun MainScreen(
                                 onNavigateToVault = { currentTab = "Vault" },
                                 onOpenDocument = onOpenDocument,
                                 onOpenDrawer = { isChatDrawerOpen = true },
+                                onNavigateToSettings = { currentTab = "Settings" },
                                 showBottomBar = false
+                            )
+                        }
+                        "Settings" -> {
+                            SettingsScreen(
+                                onShowMessage = { msg -> vaultViewModel.showMessage(msg) }
                             )
                         }
                     }

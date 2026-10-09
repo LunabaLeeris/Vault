@@ -18,6 +18,8 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.util.UUID
 
+import com.example.vault.data.local.ChatStorage
+
 enum class MessageSender {
     USER,
     ASSISTANT
@@ -48,48 +50,10 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         text = "Hello! I'm your Vault Assistant. Ask me anything about your scanned documents, receipts, invoices, or ask general questions. How can I help you today?"
     )
 
-    private val _chatSessions = MutableStateFlow<List<ChatSession>>(
-        listOf(
-            ChatSession(
-                id = "session_1",
-                title = "Vault Assistant",
-                messages = listOf(
-                    ChatMessage(
-                        sender = MessageSender.ASSISTANT,
-                        text = "Hello! I'm your Vault Assistant. Ask me anything about your scanned documents, receipts, invoices, or ask general questions. How can I help you today?"
-                    )
-                ),
-                updatedAt = System.currentTimeMillis()
-            ),
-            ChatSession(
-                id = "session_2",
-                title = "Document Summary",
-                messages = listOf(
-                    ChatMessage(sender = MessageSender.USER, text = "Give me a complete summary of all documents in my vault"),
-                    ChatMessage(
-                        sender = MessageSender.ASSISTANT,
-                        text = "Here is a quick summary of your Vault:\n\n• **Total Documents:** 4\n• **PDF Documents:** 2\n• **Images & Scans:** 2\n\nYour documents are organized and searchable by text content using on-device OCR."
-                    )
-                ),
-                updatedAt = System.currentTimeMillis() - 3600000
-            ),
-            ChatSession(
-                id = "session_3",
-                title = "Receipts & Invoices",
-                messages = listOf(
-                    ChatMessage(sender = MessageSender.USER, text = "Do I have any tax receipts uploaded?"),
-                    ChatMessage(
-                        sender = MessageSender.ASSISTANT,
-                        text = "I checked your receipts folder and found 2 receipts with itemized totals and tax summaries ready for export."
-                    )
-                ),
-                updatedAt = System.currentTimeMillis() - 86400000
-            )
-        )
-    )
+    private val _chatSessions = MutableStateFlow<List<ChatSession>>(emptyList())
     val chatSessions: StateFlow<List<ChatSession>> = _chatSessions.asStateFlow()
 
-    private val _activeSessionId = MutableStateFlow("session_1")
+    private val _activeSessionId = MutableStateFlow("")
     val activeSessionId: StateFlow<String> = _activeSessionId.asStateFlow()
 
     private val _messages = MutableStateFlow<List<ChatMessage>>(emptyList())
@@ -102,8 +66,60 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
     val userFeedbackEvent: SharedFlow<String> = _userFeedbackEvent.asSharedFlow()
 
     init {
-        val initialActive = _chatSessions.value.firstOrNull()
-        _messages.value = initialActive?.messages ?: listOf(defaultGreeting)
+        // 1. Immediately load persisted chats on creation so UI renders valid data on first frame
+        val (persistedSessions, savedActiveId) = ChatStorage.loadChatData(application)
+        if (persistedSessions.isNotEmpty()) {
+            _chatSessions.value = persistedSessions
+            val targetId = if (savedActiveId != null && persistedSessions.any { it.id == savedActiveId }) {
+                savedActiveId
+            } else {
+                persistedSessions.first().id
+            }
+            _activeSessionId.value = targetId
+            val activeSession = persistedSessions.find { it.id == targetId } ?: persistedSessions.first()
+            _messages.value = activeSession.messages
+        } else {
+            // First time ever opening the app: create and persist default session
+            val initialSession = ChatSession(
+                title = "Vault Assistant",
+                messages = listOf(defaultGreeting),
+                updatedAt = System.currentTimeMillis()
+            )
+            _chatSessions.value = listOf(initialSession)
+            _activeSessionId.value = initialSession.id
+            _messages.value = initialSession.messages
+            saveToStorage()
+        }
+
+        // 2. In background, resolve any cited documents from the Room database
+        viewModelScope.launch(Dispatchers.IO) {
+            val docs = try {
+                repository.getAllDocuments()
+            } catch (_: Exception) {
+                emptyList()
+            }
+            if (docs.isNotEmpty()) {
+                val docsMap = docs.associateBy { it.id }
+                val (resolvedSessions, _) = ChatStorage.loadChatData(application, docsMap)
+                if (resolvedSessions.isNotEmpty()) {
+                    withContext(Dispatchers.Main) {
+                        _chatSessions.value = resolvedSessions
+                        val currentActive = resolvedSessions.find { it.id == _activeSessionId.value }
+                        if (currentActive != null) {
+                            _messages.value = currentActive.messages
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    private fun saveToStorage() {
+        val currentSessions = _chatSessions.value
+        val currentActiveId = _activeSessionId.value
+        viewModelScope.launch(Dispatchers.IO) {
+            ChatStorage.saveChatData(getApplication(), currentSessions, currentActiveId)
+        }
     }
 
     private fun syncActiveSessionMessages(newMessages: List<ChatMessage>, userPrompt: String? = null) {
@@ -123,6 +139,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                 )
             } else session
         }
+        saveToStorage()
     }
 
     fun createNewChat() {
@@ -134,6 +151,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         _chatSessions.value = listOf(newSession) + _chatSessions.value
         _activeSessionId.value = newSession.id
         _messages.value = newSession.messages
+        saveToStorage()
         emitToast("Created new chat")
     }
 
@@ -141,6 +159,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         val session = _chatSessions.value.find { it.id == sessionId } ?: return
         _activeSessionId.value = sessionId
         _messages.value = session.messages
+        saveToStorage()
     }
 
     fun renameChat(sessionId: String, newTitle: String) {
@@ -149,6 +168,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         _chatSessions.value = _chatSessions.value.map { session ->
             if (session.id == sessionId) session.copy(title = trimmed) else session
         }
+        saveToStorage()
         emitToast("Chat renamed")
     }
 
@@ -171,6 +191,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                 _messages.value = nextSession.messages
             }
         }
+        saveToStorage()
         emitToast("Chat deleted")
     }
 

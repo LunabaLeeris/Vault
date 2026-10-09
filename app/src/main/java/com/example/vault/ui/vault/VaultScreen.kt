@@ -152,6 +152,7 @@ fun VaultScreen(
     onStartSaveFlow: (PendingDocument) -> Unit,
     onOpenDocument: (DocumentEntity) -> Unit = {},
     onNavigateToChat: () -> Unit = {},
+    onNavigateToSettings: () -> Unit = {},
     showBottomBar: Boolean = true
 ) {
     val context = LocalContext.current
@@ -292,7 +293,7 @@ fun VaultScreen(
                         when (tabName) {
                             "Vault" -> { /* Already on Vault */ }
                             "Chat" -> onNavigateToChat()
-                            "Settings" -> viewModel.showMessage("Settings screen is coming soon")
+                            "Settings" -> onNavigateToSettings()
                         }
                     }
                 )
