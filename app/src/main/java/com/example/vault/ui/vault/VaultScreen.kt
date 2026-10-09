@@ -22,6 +22,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -39,8 +40,12 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.DriveFileMove
 import androidx.compose.material.icons.automirrored.rounded.ManageSearch
+import androidx.compose.material.icons.outlined.ChatBubbleOutline
+import androidx.compose.material.icons.outlined.Folder
+import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.AutoAwesome
+import androidx.compose.material.icons.rounded.ChatBubble
 import androidx.compose.material.icons.rounded.ChatBubbleOutline
 import androidx.compose.material.icons.rounded.Clear
 import androidx.compose.material.icons.rounded.DarkMode
@@ -145,7 +150,9 @@ fun VaultScreen(
     viewModel: VaultViewModel,
     onFolderClick: (folderId: Long) -> Unit,
     onStartSaveFlow: (PendingDocument) -> Unit,
-    onOpenDocument: (DocumentEntity) -> Unit = {}
+    onOpenDocument: (DocumentEntity) -> Unit = {},
+    onNavigateToChat: () -> Unit = {},
+    showBottomBar: Boolean = true
 ) {
     val context = LocalContext.current
     val activity = context as? Activity
@@ -274,24 +281,28 @@ fun VaultScreen(
 
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,
+        contentWindowInsets = WindowInsets(0, 0, 0, 0),
         snackbarHost = { SnackbarHost(snackbarHostState) },
         bottomBar = {
-            VaultBottomNavigationBar(
-                isDark = isDark,
-                onTabClick = { tabName ->
-                    when (tabName) {
-                        "Vault" -> { /* Already on Vault */ }
-                        "Chat" -> viewModel.showMessage("Chat screen is coming soon")
-                        "Settings" -> viewModel.showMessage("Settings screen is coming soon")
+            if (showBottomBar) {
+                VaultBottomNavigationBar(
+                    isDark = isDark,
+                    currentTab = "Vault",
+                    onTabClick = { tabName ->
+                        when (tabName) {
+                            "Vault" -> { /* Already on Vault */ }
+                            "Chat" -> onNavigateToChat()
+                            "Settings" -> viewModel.showMessage("Settings screen is coming soon")
+                        }
                     }
-                }
-            )
+                )
+            }
         }
     ) { innerPadding ->
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(bottom = innerPadding.calculateBottomPadding())
+                .padding(bottom = if (showBottomBar) innerPadding.calculateBottomPadding() else 0.dp)
         ) {
             Column(
                 modifier = Modifier
@@ -576,6 +587,7 @@ fun VaultScreen(
                                 FolderGridCard(
                                     folder = folder,
                                     previewDocs = folderDocs,
+                                    
                                     isDark = isDark,
                                     onClick = { onFolderClick(folder.id) },
                                     modifier = Modifier.weight(1f)
@@ -1277,17 +1289,9 @@ fun FolderGridCard(
     onClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val backColor = if (isDark) Color(0xFF142B20) else Color(0xFF16A34A)
-    val frontGradient = if (isDark) {
-        Brush.verticalGradient(
-            colors = listOf(Color(0xFF1E4332), Color(0xFF132B20))
-        )
-    } else {
-        Brush.verticalGradient(
-            colors = listOf(Color(0xFF3ECF8E), Color(0xFF24B47E))
-        )
-    }
-    val frontBorder = if (isDark) Color(0xFF2C5E45) else Color(0xFF34D399)
+    val backColor = if (isDark) Color(0xFF14241C) else Color(0xFF1A8A56)
+    val frontColor = if (isDark) Color(0xFF1A3326) else Color(0xFF249D66)
+    val frontBorder = if (isDark) Color(0xFF26503B) else Color(0xFF1E8854)
 
     val hasFiles = previewDocs.isNotEmpty()
 
@@ -1306,14 +1310,13 @@ fun FolderGridCard(
             Surface(
                 modifier = Modifier.fillMaxSize(),
                 shape = RoundedCornerShape(18.dp),
-                color = Color.Transparent,
+                color = frontColor,
                 border = BorderStroke(1.dp, frontBorder),
                 shadowElevation = 3.dp
             ) {
                 Box(
                     modifier = Modifier
                         .fillMaxSize()
-                        .background(frontGradient)
                         .padding(horizontal = 14.dp, vertical = 12.dp)
                 ) {
                     Column(
@@ -1437,14 +1440,13 @@ fun FolderGridCard(
                     topStart = 14.dp,
                     topEnd = 14.dp
                 ),
-                color = Color.Transparent,
+                color = frontColor,
                 border = BorderStroke(1.dp, frontBorder),
                 shadowElevation = 4.dp
             ) {
                 Box(
                     modifier = Modifier
                         .fillMaxSize()
-                        .background(frontGradient)
                         .padding(horizontal = 14.dp, vertical = 10.dp)
                 ) {
                     Column(
@@ -2070,8 +2072,9 @@ fun FindDetailBottomSheet(
 // ==========================================
 
 @Composable
-private fun VaultBottomNavigationBar(
+fun VaultBottomNavigationBar(
     isDark: Boolean,
+    currentTab: String = "Vault",
     onTabClick: (String) -> Unit
 ) {
     Surface(
@@ -2091,26 +2094,29 @@ private fun VaultBottomNavigationBar(
             horizontalArrangement = Arrangement.SpaceAround,
             verticalAlignment = Alignment.CenterVertically
         ) {
+            val isVaultSelected = currentTab == "Vault"
             BottomNavItem(
                 label = "Vault",
-                icon = Icons.Rounded.Folder,
-                isSelected = true,
+                icon = if (isVaultSelected) Icons.Rounded.Folder else Icons.Outlined.Folder,
+                isSelected = isVaultSelected,
                 isDark = isDark,
                 onClick = { onTabClick("Vault") }
             )
 
+            val isChatSelected = currentTab == "Chat"
             BottomNavItem(
                 label = "Chat",
-                icon = Icons.Rounded.ChatBubbleOutline,
-                isSelected = false,
+                icon = if (isChatSelected) Icons.Rounded.ChatBubble else Icons.Outlined.ChatBubbleOutline,
+                isSelected = isChatSelected,
                 isDark = isDark,
                 onClick = { onTabClick("Chat") }
             )
 
+            val isSettingsSelected = currentTab == "Settings"
             BottomNavItem(
                 label = "Settings",
-                icon = Icons.Rounded.Settings,
-                isSelected = false,
+                icon = if (isSettingsSelected) Icons.Rounded.Settings else Icons.Outlined.Settings,
+                isSelected = isSettingsSelected,
                 isDark = isDark,
                 onClick = { onTabClick("Settings") }
             )

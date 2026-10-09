@@ -388,6 +388,10 @@ class VaultRepository(
         scored.sortedByDescending { it.second }.map { it.first to it.third }
     }
 
+    suspend fun getAllDocuments(): List<DocumentEntity> = withContext(Dispatchers.IO) {
+        vaultDao.getAllDocumentsSync()
+    }
+
     fun getFile(relativePath: String) = fileStorageManager.getFile(relativePath)
 
     companion object {

@@ -2,6 +2,7 @@ package com.example.vault.ui.navigation
 
 sealed class Screen(val route: String) {
     data object Vault : Screen("vault")
+    data object Chat : Screen("chat")
 
     data object FolderDetail : Screen("folder/{folderId}") {
         fun createRoute(folderId: Long) = "folder/$folderId"

@@ -16,10 +16,12 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
+import com.example.vault.ui.chat.ChatScreen
+import com.example.vault.ui.chat.ChatViewModel
 import com.example.vault.ui.editor.SaveDocumentScreen
+import com.example.vault.ui.main.MainScreen
 import com.example.vault.ui.vault.FolderDetailScreen
 import com.example.vault.ui.vault.FolderDetailViewModel
-import com.example.vault.ui.vault.VaultScreen
 import com.example.vault.ui.vault.VaultViewModel
 import com.example.vault.ui.viewer.ImageViewerScreen
 import com.example.vault.ui.viewer.PdfViewerScreen
@@ -31,6 +33,7 @@ fun AppNavigation(
     val context = LocalContext.current
     val app = context.applicationContext as Application
     val vaultViewModel: VaultViewModel = viewModel()
+    val chatViewModel: ChatViewModel = viewModel()
 
     NavHost(
         navController = navController,
@@ -61,8 +64,9 @@ fun AppNavigation(
         }
     ) {
         composable(Screen.Vault.route) {
-            VaultScreen(
-                viewModel = vaultViewModel,
+            MainScreen(
+                vaultViewModel = vaultViewModel,
+                chatViewModel = chatViewModel,
                 onFolderClick = { folderId ->
                     navController.navigate(Screen.FolderDetail.createRoute(folderId))
                 },
@@ -75,7 +79,29 @@ fun AppNavigation(
                     } else {
                         navController.navigate(Screen.ViewImage.createRoute(doc.id))
                     }
-                }
+                },
+                initialTab = "Vault"
+            )
+        }
+
+        composable(Screen.Chat.route) {
+            MainScreen(
+                vaultViewModel = vaultViewModel,
+                chatViewModel = chatViewModel,
+                onFolderClick = { folderId ->
+                    navController.navigate(Screen.FolderDetail.createRoute(folderId))
+                },
+                onStartSaveFlow = {
+                    navController.navigate(Screen.SaveDocument.route)
+                },
+                onOpenDocument = { doc ->
+                    if (doc.mimeType.contains("pdf", ignoreCase = true)) {
+                        navController.navigate(Screen.ViewPdf.createRoute(doc.id))
+                    } else {
+                        navController.navigate(Screen.ViewImage.createRoute(doc.id))
+                    }
+                },
+                initialTab = "Chat"
             )
         }
 
