@@ -9,10 +9,13 @@
 /.idea/assetWizardSettings.xml
 /.idea/deploymentTargetSelector.xml
 /.idea/deploymentTargetDropDown.xml
-/.idea/deploymentTargetDropDown.xml
 .DS_Store
 /build
 /captures
 .externalNativeBuild
 .cxx
 local.properties
+/build-rag.log
+*.litertlm
+/app/src/models/
+/app/src/main/assets/
