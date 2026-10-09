@@ -2,270 +2,185 @@ package com.example.vault.data.repository
 
 import android.content.Context
 import android.net.Uri
-import com.example.vault.data.local.DocumentEntity
-import com.example.vault.data.local.DocumentPageEntity
-import com.example.vault.data.local.DocumentWithTextStatus
-import com.example.vault.data.local.FolderEntity
-import com.example.vault.data.local.FolderWithCount
-import com.example.vault.data.local.VaultDao
-import com.example.vault.data.local.VaultDatabase
+import androidx.room.InvalidationTracker
+import androidx.room.withTransaction
+import com.example.vault.data.local.*
+import com.example.vault.ocr.ExtractedPage
+import com.example.vault.ocr.TextRecognitionHelper
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.callbackFlow
+import kotlinx.coroutines.flow.conflate
+import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.withContext
 
-data class PendingDocument(
-    val uri: Uri,
-    val mimeType: String,
-    val defaultTitle: String,
-    val suggestedFolderId: Long? = null
-)
+data class PendingDocument(val uri: Uri, val mimeType: String, val defaultTitle: String, val suggestedFolderId: Long? = null)
 
 class VaultRepository(
     private val vaultDao: VaultDao,
-    private val fileStorageManager: FileStorageManager
+    private val fileStorageManager: FileStorageManager,
+    private val database: VaultDatabase,
 ) {
+    private val mutablePending = MutableStateFlow<PendingDocument?>(null)
+    val pendingDocument = mutablePending.asStateFlow()
+    fun setPendingDocument(pending: PendingDocument?) { mutablePending.value = pending }
 
-    private val _pendingDocument = MutableStateFlow<PendingDocument?>(null)
-    val pendingDocument = _pendingDocument.asStateFlow()
-
-    fun setPendingDocument(pending: PendingDocument?) {
-        _pendingDocument.value = pending
+    suspend fun ensureDefaultFolderExists(): Long = database.withTransaction {
+        vaultDao.findFolderByName("Inbox")?.id ?: vaultDao.insertFolder(FolderEntity(name = "Inbox"))
     }
 
-    suspend fun ensureDefaultFolderExists(): Long = withContext(Dispatchers.IO) {
-        val existing = vaultDao.findFolderByName("Inbox")
-        if (existing != null) {
-            existing.id
-        } else {
-            vaultDao.insertFolder(FolderEntity(name = "Inbox"))
+    fun getFoldersWithCount() = vaultDao.getFoldersWithCount()
+    fun getAllFolders() = vaultDao.getAllFolders()
+    fun getFolderById(folderId: Long) = vaultDao.getFolderById(folderId)
+    fun getDocumentsInFolder(folderId: Long) = vaultDao.getDocumentsInFolder(folderId)
+    fun getDocumentsWithTextStatusInFolder(folderId: Long) = vaultDao.getDocumentsWithTextStatusInFolder(folderId)
+    fun getDocumentById(documentId: Long) = vaultDao.getDocumentById(documentId)
+    suspend fun findDocument(documentId: Long) = vaultDao.getDocumentByIdSync(documentId)
+    fun getPagesForDocument(documentId: Long) = vaultDao.getPagesForDocument(documentId)
+    fun hasExtractedText(documentId: Long) = vaultDao.hasExtractedText(documentId)
+    suspend fun readDocumentSnapshot(): List<DocumentSnapshot> = vaultDao.getDocumentSnapshots()
+    fun getFile(relativePath: String) = fileStorageManager.getFile(relativePath)
+
+    fun observeDocumentChanges(): Flow<Unit> = callbackFlow {
+        val observer = object : InvalidationTracker.Observer("documents", "document_pages", "folders") {
+            override fun onInvalidated(tables: Set<String>) { trySend(Unit) }
         }
-    }
+        database.invalidationTracker.addObserver(observer)
+        trySend(Unit)
+        awaitClose { database.invalidationTracker.removeObserver(observer) }
+    }.conflate().flowOn(Dispatchers.IO)
 
-    fun getFoldersWithCount(): Flow<List<FolderWithCount>> =
-        vaultDao.getFoldersWithCount()
-
-    fun getAllFolders(): Flow<List<FolderEntity>> =
-        vaultDao.getAllFolders()
-
-    fun getFolderById(folderId: Long): Flow<FolderEntity?> =
-        vaultDao.getFolderById(folderId)
-
-    fun getDocumentsInFolder(folderId: Long): Flow<List<DocumentEntity>> =
-        vaultDao.getDocumentsInFolder(folderId)
-
-    fun getDocumentsWithTextStatusInFolder(folderId: Long): Flow<List<DocumentWithTextStatus>> =
-        vaultDao.getDocumentsWithTextStatusInFolder(folderId)
-
-    fun getDocumentById(documentId: Long): Flow<DocumentEntity?> =
-        vaultDao.getDocumentById(documentId)
-
-    suspend fun createFolder(name: String): Result<Long> = withContext(Dispatchers.IO) {
+    suspend fun createFolder(name: String): Result<Long> = operation {
         val trimmed = name.trim()
-        if (trimmed.isBlank()) {
-            return@withContext Result.failure(IllegalArgumentException("Folder name cannot be blank"))
-        }
-        val existing = vaultDao.findFolderByName(trimmed)
-        if (existing != null) {
-            return@withContext Result.failure(IllegalArgumentException("A folder named '$trimmed' already exists"))
-        }
-        try {
-            val id = vaultDao.insertFolder(FolderEntity(name = trimmed))
-            Result.success(id)
-        } catch (e: Exception) {
-            Result.failure(e)
+        require(trimmed.isNotBlank()) { "Folder name cannot be blank" }
+        database.withTransaction {
+            require(vaultDao.findFolderByName(trimmed) == null) { "A folder with this name already exists" }
+            vaultDao.insertFolder(FolderEntity(name = trimmed))
         }
     }
 
-    suspend fun deleteFolder(folderId: Long): Result<Unit> = withContext(Dispatchers.IO) {
-        try {
-            // Cascade delete will delete document records, but we should also clean up files
-            val existing = vaultDao.getDocumentByIdSync(folderId)
-            // Get folder entity
-            val foldersFlow = vaultDao.getAllFolders()
-            // Room foreign key CASCADE will delete document DB records
-            val folder = FolderEntity(id = folderId, name = "")
-            vaultDao.deleteFolder(folder)
-            Result.success(Unit)
-        } catch (e: Exception) {
-            Result.failure(e)
+    suspend fun deleteFolder(folderId: Long): Result<Unit> = operation {
+        withContext(NonCancellable) {
+        val files = database.withTransaction {
+            val folder = checkNotNull(vaultDao.getFolderByIdSync(folderId)) { "Folder not found" }
+            val documents = vaultDao.getDocumentsInFolderSync(folderId)
+            check(vaultDao.deleteFolder(folder) == 1)
+            documents.map { it.relativePath }
+        }
+        val failed = files.map { fileStorageManager.deleteFile(it) }.any { !it }
+        check(!failed) { "Folder deleted, but some stored files could not be removed" }
         }
     }
 
     suspend fun saveDocument(
-        sourceUri: Uri,
-        title: String,
-        mimeType: String,
-        folderId: Long,
-        onProgress: ((Float) -> Unit)? = null
-    ): Result<Long> = withContext(Dispatchers.IO) {
-        val trimmedTitle = title.trim()
-        if (trimmedTitle.isBlank()) {
-            return@withContext Result.failure(IllegalArgumentException("Document title cannot be blank"))
-        }
-
-        var savedRelativePath: String? = null
-        try {
-            // Step 1: Copy file to internal storage first
-            savedRelativePath = fileStorageManager.copyUriToInternalStorage(
-                sourceUri = sourceUri,
-                mimeType = mimeType,
-                onProgress = onProgress
-            )
-
-            // Step 2: Save database record only after file is written
-            val now = System.currentTimeMillis()
-            val documentEntity = DocumentEntity(
-                folderId = folderId,
-                title = trimmedTitle,
-                mimeType = mimeType,
-                relativePath = savedRelativePath,
-                createdAt = now,
-                updatedAt = now
-            )
-            val docId = vaultDao.insertDocument(documentEntity)
-            Result.success(docId)
-        } catch (e: Exception) {
-            // Clean up written file if saving fails
-            if (savedRelativePath != null) {
-                fileStorageManager.deleteFile(savedRelativePath)
+        sourceUri: Uri, title: String, mimeType: String, folderId: Long, onProgress: ((Float) -> Unit)? = null,
+    ): Result<Long> {
+        var ownedPath: String? = null
+        var committed = false
+        return try {
+            require(title.trim().isNotBlank()) { "Document title cannot be blank" }
+            val path = fileStorageManager.copyUriToInternalStorage(sourceUri, mimeType, onProgress)
+            ownedPath = path
+            // Finish publication once bytes are owned; cancellation must not delete an already committed original.
+            val id = withContext(NonCancellable) {
+                database.withTransaction {
+                    vaultDao.insertDocument(DocumentEntity(folderId = folderId, title = title.trim(), mimeType = mimeType, relativePath = path))
+                }.also { committed = true }
             }
-            Result.failure(e)
-        }
-    }
-
-    suspend fun renameDocument(documentId: Long, newTitle: String): Result<Unit> = withContext(Dispatchers.IO) {
-        val trimmed = newTitle.trim()
-        if (trimmed.isBlank()) {
-            return@withContext Result.failure(IllegalArgumentException("Document title cannot be blank"))
-        }
-        try {
-            vaultDao.updateDocumentTitle(documentId, trimmed)
-            Result.success(Unit)
-        } catch (e: Exception) {
-            Result.failure(e)
-        }
-    }
-
-    suspend fun deleteDocument(documentId: Long): Result<Unit> = withContext(Dispatchers.IO) {
-        try {
-            val doc = vaultDao.getDocumentByIdSync(documentId)
-                ?: return@withContext Result.failure(IllegalStateException("Document not found"))
-
-            // Remove database record
-            vaultDao.deleteDocument(doc)
-
-            // Clean up file in app-private storage
-            val fileDeleted = fileStorageManager.deleteFile(doc.relativePath)
-            if (!fileDeleted) {
-                // File deletion failed or file wasn't present, but DB was removed
-                return@withContext Result.failure(
-                    IllegalStateException("Document was removed from database, but stored file could not be deleted")
-                )
+            Result.success(id)
+        } catch (error: Exception) {
+            if (!committed) withContext(NonCancellable + Dispatchers.IO) {
+                ownedPath?.let { fileStorageManager.deleteFile(it) }
             }
-            Result.success(Unit)
-        } catch (e: Exception) {
-            Result.failure(e)
+            if (error is CancellationException) throw error
+            Result.failure(error)
         }
     }
 
-    // Document Page / Text Extraction Operations
+    suspend fun renameDocument(documentId: Long, newTitle: String): Result<Unit> = operation {
+        require(newTitle.trim().isNotBlank()) { "Document title cannot be blank" }
+        check(vaultDao.updateDocumentTitle(documentId, newTitle.trim()) == 1) { "Document not found" }
+    }
 
-    fun getPagesForDocument(documentId: Long): Flow<List<DocumentPageEntity>> =
-        vaultDao.getPagesForDocument(documentId)
-
-    fun hasExtractedText(documentId: Long): Flow<Boolean> =
-        vaultDao.hasExtractedText(documentId)
+    suspend fun deleteDocument(documentId: Long): Result<Unit> = operation {
+        withContext(NonCancellable) {
+        val document = database.withTransaction {
+            val doc = checkNotNull(vaultDao.getDocumentByIdSync(documentId)) { "Document not found" }
+            check(vaultDao.deleteDocument(doc) == 1)
+            doc
+        }
+        check(fileStorageManager.deleteFile(document.relativePath)) {
+            "Document deleted, but its stored file could not be removed"
+        }
+        }
+    }
 
     suspend fun extractAndSaveTextForDocument(
-        documentId: Long,
-        onProgress: ((currentPage: Int, totalPages: Int) -> Unit)? = null
-    ): Result<List<DocumentPageEntity>> = withContext(Dispatchers.IO) {
-        try {
-            val doc = vaultDao.getDocumentByIdSync(documentId)
-                ?: return@withContext Result.failure(IllegalStateException("Document not found"))
-
-            val file = fileStorageManager.getFile(doc.relativePath)
-            val extracted = com.example.vault.ocr.TextRecognitionHelper.extractTextFromFile(
-                file = file,
-                mimeType = doc.mimeType,
-                onProgress = onProgress
-            )
-
-            val now = System.currentTimeMillis()
-            val entities = extracted.map { page ->
-                DocumentPageEntity(
-                    documentId = documentId,
-                    pageNumber = page.pageNumber,
-                    rawText = page.text,
-                    editedText = null,
-                    updatedAt = now
-                )
-            }
-
-            vaultDao.deletePagesForDocument(documentId)
-            vaultDao.insertPages(entities)
-            Result.success(entities)
-        } catch (e: Exception) {
-            Result.failure(e)
-        }
+        documentId: Long, onProgress: ((Int, Int) -> Unit)? = null,
+    ): Result<List<DocumentPageEntity>> = operation {
+        val document = checkNotNull(vaultDao.getDocumentByIdSync(documentId)) { "Document not found" }
+        val extracted = TextRecognitionHelper.extractTextFromFile(getFile(document.relativePath), document.mimeType, onProgress)
+        publishPages(documentId, document.textRevision, extracted)
     }
 
     suspend fun saveExtractedPagesForDocument(
-        documentId: Long,
-        pages: List<com.example.vault.ocr.ExtractedPage>
-    ): Result<Unit> = withContext(Dispatchers.IO) {
-        try {
-            val now = System.currentTimeMillis()
-            val entities = pages.map { page ->
-                DocumentPageEntity(
-                    documentId = documentId,
-                    pageNumber = page.pageNumber,
-                    rawText = page.text,
-                    editedText = null,
-                    updatedAt = now
-                )
-            }
+        documentId: Long, pages: List<ExtractedPage>, expectedRevision: Long? = null,
+    ): Result<Unit> = operation {
+        val revision = expectedRevision ?: checkNotNull(vaultDao.getDocumentByIdSync(documentId)).textRevision
+        publishPages(documentId, revision, pages)
+        Unit
+    }
+
+    private suspend fun publishPages(documentId: Long, expectedRevision: Long, pages: List<ExtractedPage>) = database.withTransaction {
+        val document = checkNotNull(vaultDao.getDocumentByIdSync(documentId)) { "Document was deleted during extraction" }
+        check(document.textRevision == expectedRevision) { "Text changed during extraction. Retry extraction." }
+        require(pages.isNotEmpty() && pages.all { it.pageNumber > 0 } && pages.map { it.pageNumber }.distinct().size == pages.size) {
+            "Extraction did not return a valid page set"
+        }
+        val existing = vaultDao.getPagesForDocumentSync(documentId).associateBy { it.pageNumber }
+        val replacements = pages.map { page ->
+            val old = existing[page.pageNumber]
+            DocumentPageEntity(id = old?.id ?: 0, documentId = documentId, pageNumber = page.pageNumber,
+                rawText = page.text, editedText = old?.editedText)
+        }
+        vaultDao.deletePagesForDocument(documentId)
+        vaultDao.insertPages(replacements)
+        check(vaultDao.incrementTextRevision(documentId) == 1)
+        vaultDao.getPagesForDocumentSync(documentId)
+    }
+
+    suspend fun updatePageText(pageId: Long, editedText: String): Result<Unit> = operation {
+        database.withTransaction {
+            val page = checkNotNull(vaultDao.getPageByIdSync(pageId)) { "Text page no longer exists" }
+            check(vaultDao.updatePageText(pageId, editedText) == 1)
+            check(vaultDao.incrementTextRevision(page.documentId) == 1)
+        }
+    }
+
+    suspend fun deleteExtractedText(documentId: Long): Result<Unit> = operation {
+        database.withTransaction {
+            checkNotNull(vaultDao.getDocumentByIdSync(documentId)) { "Document not found" }
             vaultDao.deletePagesForDocument(documentId)
-            vaultDao.insertPages(entities)
-            Result.success(Unit)
-        } catch (e: Exception) {
-            Result.failure(e)
+            check(vaultDao.incrementTextRevision(documentId) == 1)
         }
     }
 
-    suspend fun updatePageText(pageId: Long, editedText: String): Result<Unit> = withContext(Dispatchers.IO) {
-        try {
-            vaultDao.updatePageText(pageId, editedText)
-            Result.success(Unit)
-        } catch (e: Exception) {
-            Result.failure(e)
-        }
+    private suspend fun <T> operation(block: suspend () -> T): Result<T> = withContext(Dispatchers.IO) {
+        try { Result.success(block()) }
+        catch (cancelled: CancellationException) { throw cancelled }
+        catch (error: Exception) { Result.failure(error) }
     }
-
-    suspend fun deleteExtractedText(documentId: Long): Result<Unit> = withContext(Dispatchers.IO) {
-        try {
-            vaultDao.deletePagesForDocument(documentId)
-            Result.success(Unit)
-        } catch (e: Exception) {
-            Result.failure(e)
-        }
-    }
-
-    fun getFile(relativePath: String) = fileStorageManager.getFile(relativePath)
 
     companion object {
-        @Volatile
-        private var INSTANCE: VaultRepository? = null
-
-        fun getInstance(context: Context): VaultRepository {
-            return INSTANCE ?: synchronized(this) {
-                val db = VaultDatabase.getDatabase(context)
-                val fileStorageManager = FileStorageManager(context)
-                val instance = VaultRepository(db.vaultDao(), fileStorageManager)
-                INSTANCE = instance
-                instance
+        @Volatile private var instance: VaultRepository? = null
+        fun getInstance(context: Context): VaultRepository = instance ?: synchronized(this) {
+            instance ?: VaultDatabase.getDatabase(context).let { db ->
+                VaultRepository(db.vaultDao(), FileStorageManager(context.applicationContext), db).also { instance = it }
             }
         }
     }

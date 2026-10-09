@@ -1,6 +1,7 @@
 package com.example.vault.data.local
 
 import androidx.room.Entity
+import androidx.room.ColumnInfo
 import androidx.room.ForeignKey
 import androidx.room.Index
 import androidx.room.PrimaryKey
@@ -25,5 +26,7 @@ data class DocumentEntity(
     val mimeType: String,
     val relativePath: String,
     val createdAt: Long = System.currentTimeMillis(),
-    val updatedAt: Long = System.currentTimeMillis()
+    val updatedAt: Long = System.currentTimeMillis(),
+    @ColumnInfo(defaultValue = "1")
+    val textRevision: Long = 1
 )

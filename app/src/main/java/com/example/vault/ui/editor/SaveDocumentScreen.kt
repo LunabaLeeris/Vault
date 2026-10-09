@@ -72,8 +72,9 @@ fun SaveDocumentScreen(
     var newFolderName by remember { mutableStateOf("") }
     var folderMenuExpanded by remember { mutableStateOf(false) }
 
-    LaunchedEffect(uiState.saveCompleted) {
+    LaunchedEffect(uiState.saveCompleted, uiState.extractionWarning) {
         if (uiState.saveCompleted) {
+            uiState.extractionWarning?.let { snackbarHostState.showSnackbar(it) }
             uiState.selectedFolderId?.let { onSaveSuccess(it) }
         }
     }

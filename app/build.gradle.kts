@@ -1,3 +1,5 @@
+import org.jetbrains.kotlin.gradle.dsl.JvmTarget
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.compose)
@@ -39,7 +41,12 @@ android {
 
 ksp {
     arg("room.generateKotlin", "true")
+    arg("room.schemaLocation", "$projectDir/schemas")
 }
+
+kotlin { compilerOptions { jvmTarget.set(JvmTarget.JVM_11) } }
+
+android.sourceSets.getByName("androidTest").assets.srcDir("$projectDir/schemas")
 
 
 dependencies {
@@ -53,7 +60,6 @@ dependencies {
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.lifecycle.runtime.ktx)
     implementation(libs.androidx.navigation.compose)
-    implementation(libs.androidx.lifecycle.viewmodel.compose)
 
     // Room
     implementation(libs.room.runtime)
@@ -64,11 +70,17 @@ dependencies {
     implementation(libs.mlkit.document.scanner)
     implementation(libs.mlkit.text.recognition)
 
+    implementation(libs.androidx.lifecycle.viewmodel.ktx)
+    implementation(libs.androidx.lifecycle.viewmodel.compose)
+    implementation(libs.androidx.lifecycle.runtime.compose)
+    implementation(libs.litert.lm)
     testImplementation(libs.junit)
+    testImplementation(libs.kotlinx.coroutines.test)
     androidTestImplementation(platform(libs.androidx.compose.bom))
     androidTestImplementation(libs.androidx.compose.ui.test.junit4)
     androidTestImplementation(libs.androidx.espresso.core)
     androidTestImplementation(libs.androidx.junit)
+    androidTestImplementation(libs.room.testing)
     debugImplementation(libs.androidx.compose.ui.test.manifest)
     debugImplementation(libs.androidx.compose.ui.tooling)
 }

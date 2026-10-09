@@ -4,6 +4,8 @@ import android.content.Context
 import android.net.Uri
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.ensureActive
 import java.io.File
 import java.io.FileOutputStream
 import java.io.InputStream
@@ -29,7 +31,7 @@ class FileStorageManager(private val context: Context) {
         sourceUri: Uri,
         mimeType: String,
         onProgress: ((Float) -> Unit)? = null
-    ): String = withContext(Dispatchers.IO) {
+    ): String {
         val extension = when {
             mimeType.contains("pdf", ignoreCase = true) -> "pdf"
             mimeType.contains("png", ignoreCase = true) -> "png"
@@ -39,6 +41,7 @@ class FileStorageManager(private val context: Context) {
         val targetFile = File(documentsDir, filename)
 
         try {
+            return withContext(Dispatchers.IO) {
             val contentResolver = context.contentResolver
             val inputStream: InputStream = contentResolver.openInputStream(sourceUri)
                 ?: throw IllegalStateException("Unable to open stream for URI: $sourceUri")
@@ -49,6 +52,7 @@ class FileStorageManager(private val context: Context) {
                     var bytesRead: Int
                     var totalCopied = 0L
                     while (input.read(buffer).also { bytesRead = it } != -1) {
+                        ensureActive()
                         output.write(buffer, 0, bytesRead)
                         totalCopied += bytesRead
                         onProgress?.invoke(1.0f)
@@ -57,10 +61,9 @@ class FileStorageManager(private val context: Context) {
                 }
             }
             "documents/$filename"
-        } catch (e: Exception) {
-            if (targetFile.exists()) {
-                targetFile.delete()
             }
+        } catch (e: Exception) {
+            withContext(NonCancellable + Dispatchers.IO) { if (targetFile.exists()) targetFile.delete() }
             throw e
         }
     }

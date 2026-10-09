@@ -42,6 +42,8 @@ import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.ui.platform.testTag
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -67,7 +69,8 @@ import java.util.Locale
 fun VaultScreen(
     viewModel: VaultViewModel,
     onFolderClick: (folderId: Long) -> Unit,
-    onStartSaveFlow: (PendingDocument) -> Unit
+    onStartSaveFlow: (PendingDocument) -> Unit,
+    onOpenChat: () -> Unit,
 ) {
     val context = LocalContext.current
     val activity = context as? Activity
@@ -114,7 +117,7 @@ fun VaultScreen(
         if (uri != null) {
             val pending = PendingDocument(
                 uri = uri,
-                mimeType = "image/jpeg",
+                mimeType = context.contentResolver.getType(uri) ?: "image/jpeg",
                 defaultTitle = "Photo_${dateFormat.format(Date())}"
             )
             viewModel.setPendingDocument(pending)
@@ -163,6 +166,7 @@ fun VaultScreen(
             TopAppBar(
                 title = { Text("Vault") },
                 actions = {
+                    TextButton(onClick = onOpenChat, modifier = Modifier.testTag("open-chat")) { Text("Chat") }
                     IconButton(onClick = { showCreateFolderDialog = true }) {
                         Icon(imageVector = Icons.Default.Add, contentDescription = "New Folder")
                     }

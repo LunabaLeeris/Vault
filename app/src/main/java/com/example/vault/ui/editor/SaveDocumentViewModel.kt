@@ -33,6 +33,7 @@ data class SaveDocumentUiState(
     val statusMessage: String = "Saving document...",
     val saveCompleted: Boolean = false,
     val savedDocumentId: Long? = null,
+    val extractionWarning: String? = null,
     val errorMessage: String? = null
 )
 
@@ -169,7 +170,9 @@ class SaveDocumentViewModel(application: Application) : AndroidViewModel(applica
             result.onSuccess { docId ->
                 if (_uiState.value.extractTextOnSave) {
                     _uiState.update { it.copy(statusMessage = "Extracting text with on-device OCR...") }
-                    repository.extractAndSaveTextForDocument(docId)
+                    val extraction = repository.extractAndSaveTextForDocument(docId)
+                    if (extraction.isFailure) _uiState.update { it.copy(
+                        extractionWarning = "Document saved. Text extraction failed. You can retry from the document's text screen.") }
                 }
                 repository.setPendingDocument(null)
                 _uiState.update {

@@ -16,3 +16,7 @@
 .externalNativeBuild
 .cxx
 local.properties
+/build-rag.log
+/build-merged.log
+*.litertlm
+/app/src/models/

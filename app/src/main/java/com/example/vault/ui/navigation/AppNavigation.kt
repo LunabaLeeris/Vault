@@ -6,6 +6,14 @@ import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
@@ -23,6 +31,10 @@ import com.example.vault.ui.vault.VaultScreen
 import com.example.vault.ui.vault.VaultViewModel
 import com.example.vault.ui.viewer.ImageViewerScreen
 import com.example.vault.ui.viewer.PdfViewerScreen
+import com.example.vault.ui.chat.ChatRoute
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 @Composable
 fun AppNavigation(
@@ -31,6 +43,16 @@ fun AppNavigation(
     val context = LocalContext.current
     val app = context.applicationContext as Application
     val vaultViewModel: VaultViewModel = viewModel()
+    val ragModel: VaultRagViewModel = viewModel()
+    val navigationScope = rememberCoroutineScope()
+    var sourceError by remember { mutableStateOf<String?>(null) }
+
+    if (sourceError != null) AlertDialog(
+        onDismissRequest = { sourceError = null },
+        title = { Text("Source unavailable") },
+        text = { Text(sourceError.orEmpty()) },
+        confirmButton = { TextButton(onClick = { sourceError = null }) { Text("Close") } },
+    )
 
     NavHost(
         navController = navController,
@@ -68,7 +90,30 @@ fun AppNavigation(
                 },
                 onStartSaveFlow = {
                     navController.navigate(Screen.SaveDocument.route)
-                }
+                },
+                onOpenChat = { navController.navigate(Screen.Chat.route) },
+            )
+        }
+
+        composable(Screen.Chat.route) {
+            ChatRoute(
+                ragModel.dependencies,
+                onNavigateBack = { navController.popBackStack() },
+                onOpenDocument = { request ->
+                    navigationScope.launch {
+                        val doc = withContext(Dispatchers.IO) {
+                            request.documentId.toLongOrNull()?.takeIf { it > 0 }?.let { ragModel.repository.findDocument(it) }
+                                ?.takeIf { ragModel.repository.getFile(it.relativePath).isFile }
+                        }
+                        withContext(Dispatchers.Main.immediate) {
+                            if (navController.currentDestination?.route != Screen.Chat.route) return@withContext
+                            if (doc == null) sourceError = "The original document is no longer available on this device."
+                            else if (doc.mimeType.contains("pdf", ignoreCase = true)) {
+                                navController.navigate(Screen.ViewPdf.createRoute(doc.id, request.pageNumber, request.textRevision, request.isEdited))
+                            } else navController.navigate(Screen.ViewImage.createRoute(doc.id, request.textRevision, request.isEdited))
+                        }
+                    }
+                },
             )
         }
 
@@ -116,11 +161,19 @@ fun AppNavigation(
 
         composable(
             route = Screen.ViewPdf.route,
-            arguments = listOf(navArgument("documentId") { type = NavType.LongType })
+            arguments = listOf(
+                navArgument("documentId") { type = NavType.LongType },
+                navArgument("pageNumber") { type = NavType.IntType; defaultValue = 1 },
+                navArgument("revision") { type = NavType.LongType; defaultValue = 0L },
+                navArgument("edited") { type = NavType.BoolType; defaultValue = false },
+            )
         ) { backStackEntry ->
             val documentId = backStackEntry.arguments?.getLong("documentId") ?: return@composable
             PdfViewerScreen(
                 documentId = documentId,
+                initialPageNumber = backStackEntry.arguments?.getInt("pageNumber") ?: 1,
+                expectedRevision = backStackEntry.arguments?.getLong("revision") ?: 0,
+                sourceEdited = backStackEntry.arguments?.getBoolean("edited") ?: false,
                 onNavigateBack = { navController.popBackStack() },
                 onViewText = {
                     navController.navigate(Screen.ViewText.createRoute(documentId))
@@ -130,11 +183,17 @@ fun AppNavigation(
 
         composable(
             route = Screen.ViewImage.route,
-            arguments = listOf(navArgument("documentId") { type = NavType.LongType })
+            arguments = listOf(
+                navArgument("documentId") { type = NavType.LongType },
+                navArgument("revision") { type = NavType.LongType; defaultValue = 0L },
+                navArgument("edited") { type = NavType.BoolType; defaultValue = false },
+            )
         ) { backStackEntry ->
             val documentId = backStackEntry.arguments?.getLong("documentId") ?: return@composable
             ImageViewerScreen(
                 documentId = documentId,
+                expectedRevision = backStackEntry.arguments?.getLong("revision") ?: 0,
+                sourceEdited = backStackEntry.arguments?.getBoolean("edited") ?: false,
                 onNavigateBack = { navController.popBackStack() },
                 onViewText = {
                     navController.navigate(Screen.ViewText.createRoute(documentId))

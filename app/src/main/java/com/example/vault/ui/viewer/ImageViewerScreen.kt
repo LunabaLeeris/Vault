@@ -42,6 +42,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.example.vault.data.repository.VaultRepository
+import com.example.vault.data.local.DocumentEntity
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
@@ -50,11 +51,13 @@ import kotlinx.coroutines.withContext
 fun ImageViewerScreen(
     documentId: Long,
     onNavigateBack: () -> Unit,
-    onViewText: () -> Unit
+    onViewText: () -> Unit,
+    expectedRevision: Long = 0,
+    sourceEdited: Boolean = false,
 ) {
     val context = LocalContext.current
     val repository = remember { VaultRepository.getInstance(context) }
-    val documentState by repository.getDocumentById(documentId).collectAsState(initial = null)
+    var documentState by remember(documentId) { mutableStateOf<DocumentEntity?>(null) }
 
     var bitmap by remember { mutableStateOf<Bitmap?>(null) }
     var isLoading by remember { mutableStateOf(true) }
@@ -64,13 +67,20 @@ fun ImageViewerScreen(
     var offsetX by remember { mutableFloatStateOf(0f) }
     var offsetY by remember { mutableFloatStateOf(0f) }
 
-    DisposableEffect(Unit) {
-        onDispose {
-            bitmap?.recycle()
+    LaunchedEffect(documentId) {
+        repository.getDocumentById(documentId).collect { doc ->
+            documentState = doc
+            if (doc == null) { errorMessage = "Document is no longer available"; isLoading = false }
         }
     }
 
-    LaunchedEffect(documentState) {
+    DisposableEffect(Unit) {
+        onDispose {
+            bitmap = null
+        }
+    }
+
+    LaunchedEffect(documentState?.relativePath) {
         val doc = documentState ?: return@LaunchedEffect
         withContext(Dispatchers.IO) {
             try {
@@ -96,6 +106,7 @@ fun ImageViewerScreen(
     }
 
     Scaffold(
+        bottomBar = { ReferenceNotice(documentState?.textRevision, expectedRevision, sourceEdited) },
         topBar = {
             TopAppBar(
                 title = {
