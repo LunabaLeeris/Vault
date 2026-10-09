@@ -52,6 +52,9 @@ class VaultRepository(
     fun getFolderById(folderId: Long): Flow<FolderEntity?> =
         vaultDao.getFolderById(folderId)
 
+    fun getRecentDocuments(): Flow<List<DocumentEntity>> =
+        vaultDao.getRecentDocuments()
+
     fun getDocumentsInFolder(folderId: Long): Flow<List<DocumentEntity>> =
         vaultDao.getDocumentsInFolder(folderId)
 
@@ -251,6 +254,138 @@ class VaultRepository(
         } catch (e: Exception) {
             Result.failure(e)
         }
+    }
+
+    suspend fun autoSortDocuments(): Result<String> = withContext(Dispatchers.IO) {
+        try {
+            val docs = vaultDao.getAllDocumentsSync()
+            if (docs.isEmpty()) {
+                return@withContext Result.success("No documents to organize yet")
+            }
+
+            val categoryFolders = listOf(
+                "Receipts & Invoices",
+                "Scans & Documents",
+                "Photos & Images",
+                "General"
+            )
+
+            val folderMap = mutableMapOf<String, Long>()
+            for (cat in categoryFolders) {
+                val existing = vaultDao.findFolderByName(cat)
+                val id = existing?.id ?: vaultDao.insertFolder(FolderEntity(name = cat))
+                folderMap[cat] = id
+            }
+
+            var movedCount = 0
+            for (doc in docs) {
+                val titleLower = doc.title.lowercase()
+                val targetCategory = when {
+                    titleLower.contains("receipt") || titleLower.contains("invoice") ||
+                    titleLower.contains("bill") || titleLower.contains("tax") ||
+                    titleLower.contains("pay") || titleLower.contains("order") -> "Receipts & Invoices"
+
+                    doc.mimeType.contains("image", ignoreCase = true) ||
+                    titleLower.contains("photo") || titleLower.contains("img") ||
+                    titleLower.contains("picture") -> "Photos & Images"
+
+                    titleLower.contains("scan") || doc.mimeType.contains("pdf", ignoreCase = true) -> "Scans & Documents"
+
+                    else -> "General"
+                }
+
+                val targetFolderId = folderMap[targetCategory] ?: continue
+                if (doc.folderId != targetFolderId) {
+                    vaultDao.updateDocumentFolder(doc.id, targetFolderId)
+                    movedCount++
+                }
+            }
+
+            Result.success("Organized ${docs.size} document(s) into folders ($movedCount reorganized)")
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    suspend fun searchDetails(query: String): List<Pair<DocumentEntity, String>> = withContext(Dispatchers.IO) {
+        if (query.isBlank()) return@withContext emptyList()
+        val trimmed = query.trim()
+        val allDocs = vaultDao.getAllDocumentsSync()
+        val matchedPages = try {
+            vaultDao.searchDocumentPages(trimmed)
+        } catch (_: Exception) {
+            emptyList()
+        }
+
+        val pageMap = matchedPages.groupBy { it.documentId }
+        val results = mutableListOf<Pair<DocumentEntity, String>>()
+
+        for (doc in allDocs) {
+            val pages = pageMap[doc.id]
+            if (pages != null && pages.isNotEmpty()) {
+                val firstPage = pages.first()
+                val fullText = firstPage.editedText ?: firstPage.rawText
+                val index = fullText.indexOf(trimmed, ignoreCase = true)
+                val snippet = if (index >= 0) {
+                    val start = (index - 20).coerceAtLeast(0)
+                    val end = (index + trimmed.length + 30).coerceAtMost(fullText.length)
+                    "Page ${firstPage.pageNumber}: \"..." + fullText.substring(start, end).replace("\n", " ").trim() + "...\""
+                } else {
+                    "Found in extracted text (Page ${firstPage.pageNumber})"
+                }
+                results.add(doc to snippet)
+            } else if (doc.title.contains(trimmed, ignoreCase = true)) {
+                results.add(doc to "Matches document title")
+            }
+        }
+        results
+    }
+
+    suspend fun findSimilarDocuments(prompt: String): List<Pair<DocumentEntity, String>> = withContext(Dispatchers.IO) {
+        val allDocs = vaultDao.getAllDocumentsSync()
+        if (prompt.isBlank()) {
+            return@withContext allDocs.take(6).map { it to "Recent document" }
+        }
+
+        val stopWords = setOf("a", "an", "the", "all", "and", "or", "to", "of", "in", "for", "with", "show", "list", "find", "get", "my", "similar", "documents", "document", "files", "file", "that", "which", "me")
+        val keywords = prompt.lowercase()
+            .split(Regex("[^a-zA-Z0-9]+"))
+            .filter { it.isNotBlank() && it !in stopWords }
+
+        if (keywords.isEmpty()) {
+            return@withContext allDocs.take(6).map { it to "Recent document" }
+        }
+
+        val scored = mutableListOf<Triple<DocumentEntity, Int, String>>()
+
+        for (doc in allDocs) {
+            var score = 0
+            var reason = ""
+            val titleLower = doc.title.lowercase()
+            val isPdf = doc.mimeType.contains("pdf", ignoreCase = true)
+            val isImage = doc.mimeType.contains("image", ignoreCase = true)
+
+            for (kw in keywords) {
+                if (titleLower.contains(kw)) {
+                    score += 3
+                    if (reason.isBlank()) reason = "Matches title \"$kw\""
+                }
+                if ((kw == "pdf" || kw == "doc") && isPdf) {
+                    score += 2
+                    if (reason.isBlank()) reason = "PDF format match"
+                }
+                if ((kw == "photo" || kw == "image" || kw == "picture") && isImage) {
+                    score += 2
+                    if (reason.isBlank()) reason = "Image format match"
+                }
+            }
+
+            if (score > 0) {
+                scored.add(Triple(doc, score, reason))
+            }
+        }
+
+        scored.sortedByDescending { it.second }.map { it.first to it.third }
     }
 
     fun getFile(relativePath: String) = fileStorageManager.getFile(relativePath)

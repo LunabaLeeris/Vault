@@ -68,6 +68,13 @@ fun AppNavigation(
                 },
                 onStartSaveFlow = {
                     navController.navigate(Screen.SaveDocument.route)
+                },
+                onOpenDocument = { doc ->
+                    if (doc.mimeType.contains("pdf", ignoreCase = true)) {
+                        navController.navigate(Screen.ViewPdf.createRoute(doc.id))
+                    } else {
+                        navController.navigate(Screen.ViewImage.createRoute(doc.id))
+                    }
                 }
             )
         }

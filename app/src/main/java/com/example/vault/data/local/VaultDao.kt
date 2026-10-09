@@ -51,6 +51,9 @@ interface VaultDao {
     @Delete
     suspend fun deleteFolder(folder: FolderEntity): Int
 
+    @Query("SELECT * FROM documents ORDER BY createdAt DESC LIMIT 20")
+    fun getRecentDocuments(): Flow<List<DocumentEntity>>
+
     @Query("SELECT * FROM documents WHERE folderId = :folderId ORDER BY createdAt DESC")
     fun getDocumentsInFolder(folderId: Long): Flow<List<DocumentEntity>>
 
@@ -100,6 +103,15 @@ interface VaultDao {
 
     @Query("DELETE FROM document_pages WHERE documentId = :documentId")
     suspend fun deletePagesForDocument(documentId: Long): Int
+
+    @Query("SELECT * FROM documents ORDER BY createdAt DESC")
+    suspend fun getAllDocumentsSync(): List<DocumentEntity>
+
+    @Query("UPDATE documents SET folderId = :folderId, updatedAt = :updatedAt WHERE id = :id")
+    suspend fun updateDocumentFolder(id: Long, folderId: Long, updatedAt: Long = System.currentTimeMillis()): Int
+
+    @Query("SELECT * FROM document_pages WHERE rawText LIKE '%' || :query || '%' OR (editedText IS NOT NULL AND editedText LIKE '%' || :query || '%')")
+    suspend fun searchDocumentPages(query: String): List<DocumentPageEntity>
 
     @Query("SELECT COUNT(*) > 0 FROM document_pages WHERE documentId = :documentId")
     fun hasExtractedText(documentId: Long): Flow<Boolean>

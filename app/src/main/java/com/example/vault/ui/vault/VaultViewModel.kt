@@ -43,6 +43,13 @@ class VaultViewModel(application: Application) : AndroidViewModel(application) {
             initialValue = emptyList()
         )
 
+    val recentDocuments: StateFlow<List<DocumentEntity>> = repository.getRecentDocuments()
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = emptyList()
+        )
+
     init {
         viewModelScope.launch {
             repository.ensureDefaultFolderExists()
@@ -93,5 +100,25 @@ class VaultViewModel(application: Application) : AndroidViewModel(application) {
 
     fun setPendingDocument(pending: PendingDocument?) {
         repository.setPendingDocument(pending)
+    }
+
+    fun autoSortDocuments(onComplete: ((String) -> Unit)? = null) {
+        viewModelScope.launch {
+            val result = repository.autoSortDocuments()
+            result.onSuccess { msg ->
+                _userMessage.value = msg
+                onComplete?.invoke(msg)
+            }.onFailure { err ->
+                _userMessage.value = err.message ?: "Failed to auto-sort documents"
+            }
+        }
+    }
+
+    suspend fun searchDetails(query: String): List<Pair<DocumentEntity, String>> {
+        return repository.searchDetails(query)
+    }
+
+    suspend fun findSimilarDocuments(prompt: String): List<Pair<DocumentEntity, String>> {
+        return repository.findSimilarDocuments(prompt)
     }
 }
