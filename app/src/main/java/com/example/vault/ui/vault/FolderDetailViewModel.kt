@@ -80,4 +80,27 @@ class FolderDetailViewModel(
             }
         }
     }
+
+    fun renameFolder(newName: String) {
+        viewModelScope.launch {
+            val result = repository.renameFolder(folderId, newName)
+            result.onSuccess {
+                _userMessage.value = "Folder renamed"
+            }.onFailure { err ->
+                _userMessage.value = err.message ?: "Failed to rename folder"
+            }
+        }
+    }
+
+    fun deleteFolder(onDeleted: () -> Unit) {
+        viewModelScope.launch {
+            val result = repository.deleteFolder(folderId)
+            result.onSuccess {
+                _userMessage.value = "Folder deleted"
+                onDeleted()
+            }.onFailure { err ->
+                _userMessage.value = err.message ?: "Failed to delete folder"
+            }
+        }
+    }
 }

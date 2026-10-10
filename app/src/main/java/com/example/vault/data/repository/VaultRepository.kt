@@ -81,15 +81,37 @@ class VaultRepository(
         }
     }
 
+    suspend fun renameFolder(folderId: Long, newName: String): Result<Unit> = withContext(Dispatchers.IO) {
+        val trimmed = newName.trim()
+        if (trimmed.isBlank()) {
+            return@withContext Result.failure(IllegalArgumentException("Folder name cannot be blank"))
+        }
+        val existing = vaultDao.findFolderByName(trimmed)
+        if (existing != null && existing.id != folderId) {
+            return@withContext Result.failure(IllegalArgumentException("A folder named '$trimmed' already exists"))
+        }
+        try {
+            vaultDao.updateFolderName(folderId, trimmed)
+            Result.success(Unit)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
     suspend fun deleteFolder(folderId: Long): Result<Unit> = withContext(Dispatchers.IO) {
         try {
-            // Cascade delete will delete document records, but we should also clean up files
-            val existing = vaultDao.getDocumentByIdSync(folderId)
-            // Get folder entity
-            val foldersFlow = vaultDao.getAllFolders()
-            // Room foreign key CASCADE will delete document DB records
-            val folder = FolderEntity(id = folderId, name = "")
-            vaultDao.deleteFolder(folder)
+            // Clean up files on disk for all documents in this folder
+            val docs = vaultDao.getDocumentsInFolderSync(folderId)
+            docs.forEach { doc ->
+                fileStorageManager.deleteFile(doc.relativePath)
+            }
+            // Room foreign key CASCADE deletes document and page records
+            vaultDao.deleteFolderById(folderId)
+
+            // Ensure a default folder exists if all folders were deleted
+            if (vaultDao.getFolderCount() == 0) {
+                vaultDao.insertFolder(FolderEntity(name = "Inbox"))
+            }
             Result.success(Unit)
         } catch (e: Exception) {
             Result.failure(e)

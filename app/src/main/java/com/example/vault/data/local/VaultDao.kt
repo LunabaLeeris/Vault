@@ -48,8 +48,17 @@ interface VaultDao {
     @Insert(onConflict = OnConflictStrategy.ABORT)
     suspend fun insertFolder(folder: FolderEntity): Long
 
+    @Query("UPDATE folders SET name = :newName WHERE id = :id")
+    suspend fun updateFolderName(id: Long, newName: String): Int
+
     @Delete
     suspend fun deleteFolder(folder: FolderEntity): Int
+
+    @Query("DELETE FROM folders WHERE id = :id")
+    suspend fun deleteFolderById(id: Long): Int
+
+    @Query("SELECT * FROM documents WHERE folderId = :folderId")
+    suspend fun getDocumentsInFolderSync(folderId: Long): List<DocumentEntity>
 
     @Query("SELECT * FROM documents ORDER BY createdAt DESC LIMIT 20")
     fun getRecentDocuments(): Flow<List<DocumentEntity>>

@@ -49,9 +49,12 @@ import androidx.compose.material.icons.rounded.ChatBubble
 import androidx.compose.material.icons.rounded.ChatBubbleOutline
 import androidx.compose.material.icons.rounded.Clear
 import androidx.compose.material.icons.rounded.DarkMode
+import androidx.compose.material.icons.rounded.Delete
 import androidx.compose.material.icons.rounded.Description
 import androidx.compose.material.icons.rounded.DocumentScanner
+import androidx.compose.material.icons.rounded.Edit
 import androidx.compose.material.icons.rounded.Folder
+import androidx.compose.material.icons.rounded.FileUpload
 import androidx.compose.material.icons.rounded.Image
 import androidx.compose.material.icons.rounded.LightMode
 import androidx.compose.material.icons.rounded.MoreHoriz
@@ -63,6 +66,8 @@ import androidx.compose.material3.AssistChipDefaults
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExtendedFloatingActionButton
 import androidx.compose.material3.FloatingActionButtonDefaults
@@ -167,11 +172,14 @@ fun VaultScreen(
 
     var searchQuery by remember { mutableStateOf("") }
     var showCreateFolderDialog by remember { mutableStateOf(false) }
+    var folderToRename by remember { mutableStateOf<FolderWithCount?>(null) }
+    var folderToDelete by remember { mutableStateOf<FolderWithCount?>(null) }
 
     // Quick Action Bottom Sheets
     var showSimilarDocsSheet by remember { mutableStateOf(false) }
     var showSortDocsSheet by remember { mutableStateOf(false) }
     var showFindDetailSheet by remember { mutableStateOf(false) }
+    var showImportSheet by remember { mutableStateOf(false) }
 
     val dateFormat = remember { SimpleDateFormat("yyyyMMdd_HHmm", Locale.getDefault()) }
 
@@ -613,9 +621,10 @@ fun VaultScreen(
                                 FolderGridCard(
                                     folder = folder,
                                     previewDocs = folderDocs,
-                                    
                                     isDark = isDark,
                                     onClick = { onFolderClick(folder.id) },
+                                    onRenameClick = { folderToRename = folder },
+                                    onDeleteClick = { folderToDelete = folder },
                                     modifier = Modifier.weight(1f)
                                 )
                             }
@@ -627,34 +636,66 @@ fun VaultScreen(
                 }
             }
 
-            // Floating Scan Action Button with title "Scan"
-            ExtendedFloatingActionButton(
-                onClick = { triggerScan() },
+            // Floating Action Buttons: Import & Scan
+            Row(
                 modifier = Modifier
                     .align(Alignment.BottomEnd)
                     .padding(end = 20.dp, bottom = 18.dp),
-                containerColor = VaultDashboardBg,
-                contentColor = Color.White,
-                shape = RoundedCornerShape(16.dp),
-                elevation = FloatingActionButtonDefaults.elevation(defaultElevation = 6.dp),
-                icon = {
-                    Icon(
-                        imageVector = Icons.Rounded.DocumentScanner,
-                        contentDescription = null,
-                        tint = SupabaseGreen,
-                        modifier = Modifier.size(22.dp)
-                    )
-                },
-                text = {
-                    Text(
-                        text = "Scan",
-                        fontFamily = Manrope,
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 15.sp,
-                        color = Color.White
-                    )
-                }
-            )
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                // Import Action Button
+                ExtendedFloatingActionButton(
+                    onClick = { showImportSheet = true },
+                    containerColor = if (isDark) Color(0xFF16251E) else Color(0xFFEAF7F0),
+                    contentColor = if (isDark) Color.White else Color(0xFF14241C),
+                    shape = RoundedCornerShape(16.dp),
+                    elevation = FloatingActionButtonDefaults.elevation(defaultElevation = 4.dp),
+                    icon = {
+                        Icon(
+                            imageVector = Icons.Rounded.FileUpload,
+                            contentDescription = "Import",
+                            tint = if (isDark) SupabaseGreen else SupabaseGreenDarker,
+                            modifier = Modifier.size(20.dp)
+                        )
+                    },
+                    text = {
+                        Text(
+                            text = "Import",
+                            fontFamily = Manrope,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 15.sp,
+                            color = if (isDark) Color.White else Color(0xFF14241C)
+                        )
+                    }
+                )
+
+                // Scan Action Button
+                ExtendedFloatingActionButton(
+                    onClick = { triggerScan() },
+                    containerColor = VaultDashboardBg,
+                    contentColor = Color.White,
+                    shape = RoundedCornerShape(16.dp),
+                    elevation = FloatingActionButtonDefaults.elevation(defaultElevation = 6.dp),
+                    icon = {
+                        Icon(
+                            imageVector = Icons.Rounded.DocumentScanner,
+                            contentDescription = null,
+                            tint = SupabaseGreen,
+                            modifier = Modifier.size(22.dp)
+                        )
+                    },
+                    text = {
+                        Text(
+                            text = "Scan",
+                            fontFamily = Manrope,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 15.sp,
+                            color = Color.White
+                        )
+                    }
+                )
+            }
         }
     }
 
@@ -664,6 +705,29 @@ fun VaultScreen(
             onConfirm = { name ->
                 viewModel.createFolder(name)
                 showCreateFolderDialog = false
+            }
+        )
+    }
+
+    folderToRename?.let { folder ->
+        RenameFolderDialog(
+            currentName = folder.name,
+            onDismiss = { folderToRename = null },
+            onConfirm = { newName ->
+                viewModel.renameFolder(folder.id, newName)
+                folderToRename = null
+            }
+        )
+    }
+
+    folderToDelete?.let { folder ->
+        DeleteFolderDialog(
+            folderName = folder.name,
+            documentCount = folder.documentCount,
+            onDismiss = { folderToDelete = null },
+            onConfirm = {
+                viewModel.deleteFolder(folder.id)
+                folderToDelete = null
             }
         )
     }
@@ -700,6 +764,22 @@ fun VaultScreen(
             onOpenDocument = { doc ->
                 showFindDetailSheet = false
                 onOpenDocument(doc)
+            }
+        )
+    }
+
+    // Sheet 4: Import Document
+    if (showImportSheet) {
+        ImportDocumentBottomSheet(
+            isDark = isDark,
+            onDismiss = { showImportSheet = false },
+            onImportPdf = {
+                pdfPickerLauncher.launch(arrayOf("application/pdf"))
+            },
+            onImportImage = {
+                photoPickerLauncher.launch(
+                    PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
+                )
             }
         )
     }
@@ -1313,8 +1393,11 @@ fun FolderGridCard(
     previewDocs: List<DocumentEntity>,
     isDark: Boolean,
     onClick: () -> Unit,
+    onRenameClick: () -> Unit = {},
+    onDeleteClick: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
+    var menuExpanded by remember { mutableStateOf(false) }
     val backColor = if (isDark) Color(0xFF14241C) else Color(0xFF1A8A56)
     val frontColor = if (isDark) Color(0xFF1A3326) else Color(0xFF249D66)
     val frontBorder = if (isDark) Color(0xFF26503B) else Color(0xFF1E8854)
@@ -1370,13 +1453,52 @@ fun FolderGridCard(
                                 }
                             }
 
-                            Text(
-                                text = "0 files",
-                                fontFamily = Manrope,
-                                fontSize = 11.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = Color.White.copy(alpha = 0.85f)
-                            )
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(2.dp)
+                            ) {
+                                Text(
+                                    text = "0 files",
+                                    fontFamily = Manrope,
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = Color.White.copy(alpha = 0.85f)
+                                )
+                                Box {
+                                    IconButton(
+                                        onClick = { menuExpanded = true },
+                                        modifier = Modifier.size(22.dp)
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Rounded.MoreHoriz,
+                                            contentDescription = "Folder options",
+                                            tint = Color.White,
+                                            modifier = Modifier.size(16.dp)
+                                        )
+                                    }
+                                    DropdownMenu(
+                                        expanded = menuExpanded,
+                                        onDismissRequest = { menuExpanded = false }
+                                    ) {
+                                        DropdownMenuItem(
+                                            text = { Text("Rename", fontFamily = Manrope) },
+                                            leadingIcon = { Icon(Icons.Rounded.Edit, contentDescription = null, modifier = Modifier.size(18.dp)) },
+                                            onClick = {
+                                                menuExpanded = false
+                                                onRenameClick()
+                                            }
+                                        )
+                                        DropdownMenuItem(
+                                            text = { Text("Delete", fontFamily = Manrope, color = MaterialTheme.colorScheme.error) },
+                                            leadingIcon = { Icon(Icons.Rounded.Delete, contentDescription = null, tint = MaterialTheme.colorScheme.error, modifier = Modifier.size(18.dp)) },
+                                            onClick = {
+                                                menuExpanded = false
+                                                onDeleteClick()
+                                            }
+                                        )
+                                    }
+                                }
+                            }
                         }
 
                         // Bottom info
@@ -1500,13 +1622,52 @@ fun FolderGridCard(
                                 }
                             }
 
-                            Text(
-                                text = if (folder.documentCount == 1) "1 file" else "${folder.documentCount} files",
-                                fontFamily = Manrope,
-                                fontSize = 11.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = Color.White.copy(alpha = 0.85f)
-                            )
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(2.dp)
+                            ) {
+                                Text(
+                                    text = if (folder.documentCount == 1) "1 file" else "${folder.documentCount} files",
+                                    fontFamily = Manrope,
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = Color.White.copy(alpha = 0.85f)
+                                )
+                                Box {
+                                    IconButton(
+                                        onClick = { menuExpanded = true },
+                                        modifier = Modifier.size(22.dp)
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Rounded.MoreHoriz,
+                                            contentDescription = "Folder options",
+                                            tint = Color.White,
+                                            modifier = Modifier.size(16.dp)
+                                        )
+                                    }
+                                    DropdownMenu(
+                                        expanded = menuExpanded,
+                                        onDismissRequest = { menuExpanded = false }
+                                    ) {
+                                        DropdownMenuItem(
+                                            text = { Text("Rename", fontFamily = Manrope) },
+                                            leadingIcon = { Icon(Icons.Rounded.Edit, contentDescription = null, modifier = Modifier.size(18.dp)) },
+                                            onClick = {
+                                                menuExpanded = false
+                                                onRenameClick()
+                                            }
+                                        )
+                                        DropdownMenuItem(
+                                            text = { Text("Delete", fontFamily = Manrope, color = MaterialTheme.colorScheme.error) },
+                                            leadingIcon = { Icon(Icons.Rounded.Delete, contentDescription = null, tint = MaterialTheme.colorScheme.error, modifier = Modifier.size(18.dp)) },
+                                            onClick = {
+                                                menuExpanded = false
+                                                onDeleteClick()
+                                            }
+                                        )
+                                    }
+                                }
+                            }
                         }
 
                         // Bottom info
@@ -2086,6 +2247,183 @@ fun FindDetailBottomSheet(
                                 )
                             )
                         }
+                    }
+                }
+            }
+        }
+    }
+}
+
+// ==========================================
+// Import Document Bottom Sheet
+// ==========================================
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun ImportDocumentBottomSheet(
+    isDark: Boolean,
+    onDismiss: () -> Unit,
+    onImportPdf: () -> Unit,
+    onImportImage: () -> Unit
+) {
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        sheetState = sheetState,
+        containerColor = MaterialTheme.colorScheme.surface,
+        shape = RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp)
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 22.dp)
+                .padding(bottom = 36.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Surface(
+                    modifier = Modifier.size(36.dp),
+                    shape = RoundedCornerShape(10.dp),
+                    color = if (isDark) Color(0xFF16251E) else Color(0xFFEAF7F0)
+                ) {
+                    Box(contentAlignment = Alignment.Center) {
+                        Icon(
+                            imageVector = Icons.Rounded.FileUpload,
+                            contentDescription = null,
+                            tint = if (isDark) SupabaseGreen else SupabaseGreenDarker,
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
+                }
+                Spacer(modifier = Modifier.width(12.dp))
+                Column {
+                    Text(
+                        text = "Import Document",
+                        style = MaterialTheme.typography.titleMedium.copy(
+                            fontFamily = Manrope,
+                            fontWeight = FontWeight.ExtraBold,
+                            fontSize = 16.sp
+                        ),
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                    Text(
+                        text = "Bring existing files from your device into Vault",
+                        style = MaterialTheme.typography.bodySmall.copy(
+                            fontFamily = Manrope,
+                            fontSize = 12.sp
+                        ),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(20.dp))
+
+            // Option 1: Import PDF
+            Surface(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(14.dp))
+                    .clickable {
+                        onDismiss()
+                        onImportPdf()
+                    },
+                shape = RoundedCornerShape(14.dp),
+                color = if (isDark) VaultDashboardBg else Color(0xFFF8FAFC),
+                border = BorderStroke(1.dp, if (isDark) VaultCardBorderDark else VaultCardBorderLight)
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(16.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Surface(
+                        modifier = Modifier.size(42.dp),
+                        shape = RoundedCornerShape(10.dp),
+                        color = if (isDark) Color(0xFF3B1E1E) else Color(0xFFFEE2E2)
+                    ) {
+                        Box(contentAlignment = Alignment.Center) {
+                            Icon(
+                                imageVector = Icons.Rounded.PictureAsPdf,
+                                contentDescription = null,
+                                tint = Color(0xFFDC2626),
+                                modifier = Modifier.size(22.dp)
+                            )
+                        }
+                    }
+                    Spacer(modifier = Modifier.width(14.dp))
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = "Import PDF",
+                            fontFamily = Manrope,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 14.5.sp,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                        Text(
+                            text = "Add multi-page PDF documents from storage",
+                            fontFamily = Manrope,
+                            fontSize = 11.5.sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(10.dp))
+
+            // Option 2: Import Image
+            Surface(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(14.dp))
+                    .clickable {
+                        onDismiss()
+                        onImportImage()
+                    },
+                shape = RoundedCornerShape(14.dp),
+                color = if (isDark) VaultDashboardBg else Color(0xFFF8FAFC),
+                border = BorderStroke(1.dp, if (isDark) VaultCardBorderDark else VaultCardBorderLight)
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(16.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Surface(
+                        modifier = Modifier.size(42.dp),
+                        shape = RoundedCornerShape(10.dp),
+                        color = if (isDark) Color(0xFF1E293B) else Color(0xFFDBEAFE)
+                    ) {
+                        Box(contentAlignment = Alignment.Center) {
+                            Icon(
+                                imageVector = Icons.Rounded.Image,
+                                contentDescription = null,
+                                tint = Color(0xFF2563EB),
+                                modifier = Modifier.size(22.dp)
+                            )
+                        }
+                    }
+                    Spacer(modifier = Modifier.width(14.dp))
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = "Import Photo / Image",
+                            fontFamily = Manrope,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 14.5.sp,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                        Text(
+                            text = "Select receipts, scans, or photos from your gallery",
+                            fontFamily = Manrope,
+                            fontSize = 11.5.sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
                     }
                 }
             }

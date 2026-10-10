@@ -196,3 +196,119 @@ fun DeleteDocumentDialog(
         }
     )
 }
+
+@Composable
+fun RenameFolderDialog(
+    currentName: String,
+    onDismiss: () -> Unit,
+    onConfirm: (newName: String) -> Unit
+) {
+    var folderName by remember { mutableStateOf(currentName) }
+    var isError by remember { mutableStateOf(false) }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        shape = RoundedCornerShape(12.dp),
+        containerColor = MaterialTheme.colorScheme.surface,
+        title = {
+            Text(
+                "Rename Folder",
+                style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold)
+            )
+        },
+        text = {
+            OutlinedTextField(
+                value = folderName,
+                onValueChange = {
+                    folderName = it
+                    isError = false
+                },
+                label = { Text("Folder Name") },
+                isError = isError,
+                supportingText = if (isError) {
+                    { Text("Folder name cannot be blank") }
+                } else null,
+                singleLine = true,
+                shape = RoundedCornerShape(8.dp),
+                colors = OutlinedTextFieldDefaults.colors(
+                    focusedBorderColor = SupabaseGreenDarker,
+                    focusedLabelColor = SupabaseGreenDarker,
+                    cursorColor = SupabaseGreenDarker
+                ),
+                modifier = Modifier.fillMaxWidth()
+            )
+        },
+        confirmButton = {
+            Button(
+                onClick = {
+                    val trimmed = folderName.trim()
+                    if (trimmed.isBlank()) {
+                        isError = true
+                    } else {
+                        onConfirm(trimmed)
+                    }
+                },
+                shape = RoundedCornerShape(8.dp),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = SupabaseGreenDarker,
+                    contentColor = Color.White
+                )
+            ) {
+                Text("Rename", fontWeight = FontWeight.SemiBold)
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Cancel", color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+        }
+    )
+}
+
+@Composable
+fun DeleteFolderDialog(
+    folderName: String,
+    documentCount: Int = 0,
+    onDismiss: () -> Unit,
+    onConfirm: () -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        shape = RoundedCornerShape(12.dp),
+        containerColor = MaterialTheme.colorScheme.surface,
+        title = {
+            Text(
+                "Delete Folder",
+                style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold)
+            )
+        },
+        text = {
+            val warning = if (documentCount > 0) {
+                "Are you sure you want to delete \"$folderName\"? This folder contains $documentCount document(s) which will also be permanently removed from your device."
+            } else {
+                "Are you sure you want to delete \"$folderName\"? This action cannot be undone."
+            }
+            Text(
+                warning,
+                style = MaterialTheme.typography.bodyMedium
+            )
+        },
+        confirmButton = {
+            Button(
+                onClick = onConfirm,
+                shape = RoundedCornerShape(8.dp),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = MaterialTheme.colorScheme.error
+                )
+            ) {
+                Text("Delete", fontWeight = FontWeight.SemiBold)
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Cancel", color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+        }
+    )
+}
+

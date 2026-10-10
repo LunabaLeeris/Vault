@@ -76,6 +76,28 @@ class VaultViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    fun renameFolder(folderId: Long, newName: String) {
+        viewModelScope.launch {
+            val result = repository.renameFolder(folderId, newName)
+            result.onSuccess {
+                _userMessage.value = "Folder renamed"
+            }.onFailure { error ->
+                _userMessage.value = error.message ?: "Failed to rename folder"
+            }
+        }
+    }
+
+    fun deleteFolder(folderId: Long) {
+        viewModelScope.launch {
+            val result = repository.deleteFolder(folderId)
+            result.onSuccess {
+                _userMessage.value = "Folder deleted"
+            }.onFailure { error ->
+                _userMessage.value = error.message ?: "Failed to delete folder"
+            }
+        }
+    }
+
     fun renameDocument(documentId: Long, newTitle: String) {
         viewModelScope.launch {
             val result = repository.renameDocument(documentId, newTitle)
