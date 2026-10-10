@@ -44,41 +44,6 @@ Operating with **zero internet permissions**, Vault processes, embeds, indexes, 
 
 ---
 
-## Architecture & Data Flow
-
-```mermaid
-flowchart TD
-    subgraph Ingestion ["Ingestion & Capture"]
-        CAM["ML Kit Scanner"] --> RAW["Internal Storage (UUID.pdf / UUID.jpg)"]
-        PICK["SAF / Photo Picker"] --> RAW
-    end
-
-    subgraph OCR_Layer ["Local Text Pipeline"]
-        RAW --> OCR["ML Kit Text Recognition"]
-        OCR --> ROOM[("Room SQLite (vault.db)")]
-        EDIT["User Text Editor"] --> ROOM
-    end
-
-    subgraph Indexing ["Dual Retrieval Index"]
-        ROOM --> CHUNK["Page Chunker (480 chars / 80 overlap)"]
-        CHUNK --> FTS4[("SQLite FTS4 Index (rag_index.db)")]
-        CHUNK --> EMBED["MobileBERT Embeddings (MediaPipe)"]
-        EMBED --> VEC[("Vector Retrieval Index")]
-    end
-
-    subgraph Chat_RAG ["Local RAG Engine"]
-        USER["User Query"] --> ROUTER["Hybrid Intent Router"]
-        ROUTER --> SEARCH["Hybrid Retrieval (FTS4 + Cosine Similarity)"]
-        SEARCH --> EVID["Ranked Evidence Budget (max 8 chunks)"]
-        EVID --> LLM["LiteRT-LM (Gemma Model)"]
-        LLM --> VERIFY["Citation Checker"]
-        VERIFY --> ANS["Answer with Tap-to-Open Citations"]
-        ANS --> VIEWER["Native PDF / Image Viewer (Target Page)"]
-    end
-```
-
----
-
 ## Technology Stack & Libraries
 
 | Category | Technology | Version | Purpose |
