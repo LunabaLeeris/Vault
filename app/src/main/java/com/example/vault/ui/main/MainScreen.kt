@@ -38,6 +38,7 @@ import com.example.vault.ui.chat.ChatSession
 import com.example.vault.ui.chat.ChatViewModel
 import com.example.vault.ui.chat.DeleteChatDialog
 import com.example.vault.ui.chat.RenameChatDialog
+import com.example.vault.rag.model.SourceNavigationRequest
 import com.example.vault.ui.chat.RightChatDrawer
 import com.example.vault.ui.settings.SettingsScreen
 import com.example.vault.ui.theme.ThemeState
@@ -52,6 +53,7 @@ fun MainScreen(
     onFolderClick: (Long) -> Unit,
     onStartSaveFlow: (PendingDocument) -> Unit,
     onOpenDocument: (DocumentEntity) -> Unit,
+    onOpenSource: (SourceNavigationRequest) -> Unit = {},
     initialTab: String = "Vault"
 ) {
     var currentTab by rememberSaveable { mutableStateOf(initialTab) }
@@ -139,6 +141,7 @@ fun MainScreen(
                                 viewModel = chatViewModel,
                                 onNavigateToVault = { currentTab = "Vault" },
                                 onOpenDocument = onOpenDocument,
+                                onOpenSource = onOpenSource,
                                 onOpenDrawer = { isChatDrawerOpen = true },
                                 onNavigateToSettings = { currentTab = "Settings" },
                                 showBottomBar = false

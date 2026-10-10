@@ -19,3 +19,5 @@ local.properties
 *.litertlm
 /app/src/models/
 /app/src/main/assets/
+!/app/src/main/assets/
+!/app/src/main/assets/mobile_bert.tflite

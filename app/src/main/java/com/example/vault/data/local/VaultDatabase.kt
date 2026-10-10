@@ -5,14 +5,12 @@ import androidx.room.Database
 import androidx.room.Room
 import androidx.room.RoomDatabase
 import androidx.sqlite.db.SupportSQLiteDatabase
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.launch
+import androidx.room.migration.Migration
 
 @Database(
     entities = [FolderEntity::class, DocumentEntity::class, DocumentPageEntity::class],
-    version = 1,
-    exportSchema = false
+    version = 2,
+    exportSchema = true
 )
 abstract class VaultDatabase : RoomDatabase() {
     abstract fun vaultDao(): VaultDao
@@ -27,25 +25,17 @@ abstract class VaultDatabase : RoomDatabase() {
                     context.applicationContext,
                     VaultDatabase::class.java,
                     "vault.db"
-                ).fallbackToDestructiveMigration()
-                .addCallback(object : Callback() {
-                    override fun onCreate(db: SupportSQLiteDatabase) {
-                        super.onCreate(db)
-                        CoroutineScope(Dispatchers.IO).launch {
-                            try {
-                                INSTANCE?.vaultDao()?.let { dao ->
-                                    if (dao.getFolderCount() == 0) {
-                                        dao.insertFolder(FolderEntity(name = "Inbox"))
-                                    }
-                                }
-                            } catch (_: Exception) {
-                                // Default folder creation fallback handled in repository
-                            }
-                        }
-                    }
-                }).build()
+                ).addMigrations(MIGRATION_1_2).build()
                 INSTANCE = instance
                 instance
+            }
+        }
+
+        val MIGRATION_1_2 = object : Migration(1, 2) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE documents ADD COLUMN textRevision INTEGER NOT NULL DEFAULT 1")
+                db.execSQL("ALTER TABLE document_pages ADD COLUMN translatedText TEXT")
+                db.execSQL("ALTER TABLE document_pages ADD COLUMN translatedLanguage TEXT")
             }
         }
     }

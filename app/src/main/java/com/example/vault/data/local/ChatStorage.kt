@@ -5,6 +5,10 @@ import android.util.Log
 import com.example.vault.ui.chat.ChatMessage
 import com.example.vault.ui.chat.ChatSession
 import com.example.vault.ui.chat.MessageSender
+import com.example.vault.rag.DocumentIntent
+import com.example.vault.rag.IntentPlan
+import com.example.vault.rag.IntentReviewState
+import com.example.vault.rag.model.SearchScope
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
@@ -46,6 +50,23 @@ object ChatStorage {
                     msgObj.put("text", msg.text)
                     msgObj.put("timestamp", msg.timestamp)
                     msgObj.put("isLiked", msg.isLiked)
+                    msgObj.put("intentState", msg.intentState.name)
+                    val intentName = msg.intent?.name ?: msg.intentPlan?.intent?.name
+                    if (intentName != null) {
+                        msgObj.put("intent", intentName)
+                    }
+                    msg.intentPlan?.let { plan ->
+                        msgObj.put("intentConfidence", plan.confidence.toDouble())
+                        msgObj.put("normalizedRequest", plan.normalizedRequest)
+                        msgObj.put("searchTerms", JSONArray(plan.searchTerms))
+                        msgObj.put("resultLimit", plan.resultLimit)
+                        msgObj.put("scopeLabel", plan.scopeLabel)
+                        when (val scope = plan.scope) {
+                            SearchScope.All -> msgObj.put("scopeType", "all")
+                            is SearchScope.Folder -> { msgObj.put("scopeType", "folder"); msgObj.put("scopeId", scope.id) }
+                            is SearchScope.Document -> { msgObj.put("scopeType", "document"); msgObj.put("scopeId", scope.id) }
+                        }
+                    }
 
                     val docIdsArray = JSONArray()
                     for (doc in msg.relatedDocs) {
@@ -133,6 +154,18 @@ object ChatStorage {
                         val text = msgObj.optString("text", "")
                         val timestamp = msgObj.optLong("timestamp", System.currentTimeMillis())
                         val isLiked = msgObj.optBoolean("isLiked", false)
+                        val intentState = runCatching { IntentReviewState.valueOf(msgObj.optString("intentState", IntentReviewState.NONE.name)) }.getOrDefault(IntentReviewState.NONE)
+                        val intentPlan = msgObj.optString("intent", "").takeIf { it.isNotBlank() }?.let { intentName ->
+                            runCatching {
+                                val terms = msgObj.optJSONArray("searchTerms")?.let { array -> (0 until array.length()).map { array.optString(it) } } ?: emptyList()
+                                val scope = when (msgObj.optString("scopeType", "all")) {
+                                    "folder" -> SearchScope.Folder(msgObj.optString("scopeId"))
+                                    "document" -> SearchScope.Document(msgObj.optString("scopeId"))
+                                    else -> SearchScope.All
+                                }
+                                IntentPlan(DocumentIntent.valueOf(intentName), msgObj.optDouble("intentConfidence", 0.5).toFloat(), msgObj.optString("normalizedRequest", text), terms, scope, msgObj.optString("scopeLabel", "").takeIf { it.isNotBlank() }, resultLimit = msgObj.optInt("resultLimit", 10).coerceIn(1, 50))
+                            }.getOrNull()
+                        }
 
                         val relatedDocs = mutableListOf<DocumentEntity>()
                         val docIdsArray = msgObj.optJSONArray("relatedDocIds")
@@ -150,7 +183,10 @@ object ChatStorage {
                                 text = text,
                                 timestamp = timestamp,
                                 isLiked = isLiked,
-                                relatedDocs = relatedDocs
+                                relatedDocs = relatedDocs,
+                                intentPlan = intentPlan,
+                                intentState = intentState,
+                                intent = intentPlan?.intent
                             )
                         )
                     }

@@ -2,6 +2,8 @@ package com.example.vault.data.repository
 
 import android.content.Context
 import android.net.Uri
+import androidx.room.InvalidationTracker
+import androidx.room.withTransaction
 import com.example.vault.data.local.DocumentEntity
 import com.example.vault.data.local.DocumentPageEntity
 import com.example.vault.data.local.DocumentWithTextStatus
@@ -11,6 +13,10 @@ import com.example.vault.data.local.VaultDao
 import com.example.vault.data.local.VaultDatabase
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.callbackFlow
+import kotlinx.coroutines.flow.conflate
+import kotlinx.coroutines.flow.flowOn
+import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.withContext
@@ -24,7 +30,8 @@ data class PendingDocument(
 
 class VaultRepository(
     private val vaultDao: VaultDao,
-    private val fileStorageManager: FileStorageManager
+    private val fileStorageManager: FileStorageManager,
+    private val database: VaultDatabase
 ) {
 
     private val _pendingDocument = MutableStateFlow<PendingDocument?>(null)
@@ -64,6 +71,19 @@ class VaultRepository(
     fun getDocumentById(documentId: Long): Flow<DocumentEntity?> =
         vaultDao.getDocumentById(documentId)
 
+    suspend fun findDocument(documentId: Long): DocumentEntity? = vaultDao.getDocumentByIdSync(documentId)
+
+    suspend fun readDocumentSnapshot() = vaultDao.getDocumentSnapshots()
+
+    fun observeDocumentChanges(): Flow<Unit> = callbackFlow {
+        val observer = object : InvalidationTracker.Observer("documents", "document_pages", "folders") {
+            override fun onInvalidated(tables: Set<String>) { trySend(Unit) }
+        }
+        database.invalidationTracker.addObserver(observer)
+        trySend(Unit)
+        awaitClose { database.invalidationTracker.removeObserver(observer) }
+    }.conflate().flowOn(Dispatchers.IO)
+
     suspend fun createFolder(name: String): Result<Long> = withContext(Dispatchers.IO) {
         val trimmed = name.trim()
         if (trimmed.isBlank()) {
@@ -83,13 +103,10 @@ class VaultRepository(
 
     suspend fun deleteFolder(folderId: Long): Result<Unit> = withContext(Dispatchers.IO) {
         try {
-            // Cascade delete will delete document records, but we should also clean up files
-            val existing = vaultDao.getDocumentByIdSync(folderId)
-            // Get folder entity
-            val foldersFlow = vaultDao.getAllFolders()
-            // Room foreign key CASCADE will delete document DB records
-            val folder = FolderEntity(id = folderId, name = "")
-            vaultDao.deleteFolder(folder)
+            val folder = vaultDao.getFolderByIdSync(folderId) ?: error("Folder not found")
+            val files = vaultDao.getDocumentsInFolderSync(folderId).map { it.relativePath }
+            database.withTransaction { vaultDao.deleteFolder(folder) }
+            files.forEach { check(fileStorageManager.deleteFile(it)) { "Folder deleted, but a stored file could not be removed" } }
             Result.success(Unit)
         } catch (e: Exception) {
             Result.failure(e)
@@ -127,7 +144,7 @@ class VaultRepository(
                 createdAt = now,
                 updatedAt = now
             )
-            val docId = vaultDao.insertDocument(documentEntity)
+            val docId = database.withTransaction { vaultDao.insertDocument(documentEntity) }
             Result.success(docId)
         } catch (e: Exception) {
             // Clean up written file if saving fails
@@ -156,8 +173,7 @@ class VaultRepository(
             val doc = vaultDao.getDocumentByIdSync(documentId)
                 ?: return@withContext Result.failure(IllegalStateException("Document not found"))
 
-            // Remove database record
-            vaultDao.deleteDocument(doc)
+            database.withTransaction { vaultDao.deleteDocument(doc) }
 
             // Clean up file in app-private storage
             val fileDeleted = fileStorageManager.deleteFile(doc.relativePath)
@@ -196,19 +212,19 @@ class VaultRepository(
                 onProgress = onProgress
             )
 
-            val now = System.currentTimeMillis()
-            val entities = extracted.map { page ->
-                DocumentPageEntity(
-                    documentId = documentId,
-                    pageNumber = page.pageNumber,
-                    rawText = page.text,
-                    editedText = null,
-                    updatedAt = now
-                )
+            val revision = doc.textRevision
+            val entities = database.withTransaction {
+                val current = vaultDao.getDocumentByIdSync(documentId) ?: error("Document was deleted during extraction")
+                check(current.textRevision == revision) { "Text changed during extraction. Retry extraction." }
+                val existing = vaultDao.getPagesForDocumentSync(documentId).associateBy { it.pageNumber }
+                val replacements = extracted.map { page ->
+                    val old = existing[page.pageNumber]
+                    DocumentPageEntity(old?.id ?: 0, documentId, page.pageNumber, page.text, old?.editedText, old?.translatedText, old?.translatedLanguage)
+                }
+                check(replacements.isNotEmpty()) { "Extraction returned no pages" }
+                vaultDao.deletePagesForDocument(documentId); vaultDao.insertPages(replacements); check(vaultDao.incrementTextRevision(documentId) == 1)
+                vaultDao.getPagesForDocumentSync(documentId)
             }
-
-            vaultDao.deletePagesForDocument(documentId)
-            vaultDao.insertPages(entities)
             Result.success(entities)
         } catch (e: Exception) {
             Result.failure(e)
@@ -217,21 +233,15 @@ class VaultRepository(
 
     suspend fun saveExtractedPagesForDocument(
         documentId: Long,
-        pages: List<com.example.vault.ocr.ExtractedPage>
+        pages: List<com.example.vault.ocr.ExtractedPage>, expectedRevision: Long? = null
     ): Result<Unit> = withContext(Dispatchers.IO) {
         try {
-            val now = System.currentTimeMillis()
-            val entities = pages.map { page ->
-                DocumentPageEntity(
-                    documentId = documentId,
-                    pageNumber = page.pageNumber,
-                    rawText = page.text,
-                    editedText = null,
-                    updatedAt = now
-                )
-            }
-            vaultDao.deletePagesForDocument(documentId)
-            vaultDao.insertPages(entities)
+            val document = vaultDao.getDocumentByIdSync(documentId) ?: error("Document not found")
+            check(expectedRevision == null || expectedRevision == document.textRevision) { "Text changed during extraction. Retry extraction." }
+            val existing = vaultDao.getPagesForDocumentSync(documentId).associateBy { it.pageNumber }
+            val entities = pages.map { page -> existing[page.pageNumber]?.let { old -> DocumentPageEntity(old.id, documentId, page.pageNumber, page.text, old.editedText, old.translatedText, old.translatedLanguage) } ?: DocumentPageEntity(documentId = documentId, pageNumber = page.pageNumber, rawText = page.text) }
+            check(entities.isNotEmpty()) { "Extraction returned no pages" }
+            database.withTransaction { vaultDao.deletePagesForDocument(documentId); vaultDao.insertPages(entities); check(vaultDao.incrementTextRevision(documentId) == 1) }
             Result.success(Unit)
         } catch (e: Exception) {
             Result.failure(e)
@@ -240,16 +250,30 @@ class VaultRepository(
 
     suspend fun updatePageText(pageId: Long, editedText: String): Result<Unit> = withContext(Dispatchers.IO) {
         try {
-            vaultDao.updatePageText(pageId, editedText)
+            database.withTransaction {
+                val page = vaultDao.getPageByIdSync(pageId) ?: error("Text page no longer exists")
+                check(vaultDao.updatePageText(pageId, editedText) == 1); check(vaultDao.incrementTextRevision(page.documentId) == 1)
+            }
             Result.success(Unit)
         } catch (e: Exception) {
             Result.failure(e)
         }
     }
 
+    suspend fun saveTranslatedPageText(pageId: Long, translatedText: String?, language: String?): Result<Unit> = withContext(Dispatchers.IO) {
+        try {
+            database.withTransaction {
+                val page = vaultDao.getPageByIdSync(pageId) ?: error("Text page no longer exists")
+                check(vaultDao.updateTranslatedPageText(pageId, translatedText, language) == 1)
+                check(vaultDao.incrementTextRevision(page.documentId) == 1)
+            }
+            Result.success(Unit)
+        } catch (error: Exception) { Result.failure(error) }
+    }
+
     suspend fun deleteExtractedText(documentId: Long): Result<Unit> = withContext(Dispatchers.IO) {
         try {
-            vaultDao.deletePagesForDocument(documentId)
+            database.withTransaction { vaultDao.deletePagesForDocument(documentId); check(vaultDao.incrementTextRevision(documentId) == 1) }
             Result.success(Unit)
         } catch (e: Exception) {
             Result.failure(e)
@@ -402,7 +426,7 @@ class VaultRepository(
             return INSTANCE ?: synchronized(this) {
                 val db = VaultDatabase.getDatabase(context)
                 val fileStorageManager = FileStorageManager(context)
-                val instance = VaultRepository(db.vaultDao(), fileStorageManager)
+                val instance = VaultRepository(db.vaultDao(), fileStorageManager, db)
                 INSTANCE = instance
                 instance
             }

@@ -1,0 +1,6 @@
+SAMPLE DOCUMENT — CONFERENCE ITINERARY
+
+The technology conference takes place in Singapore on 12 November 2026.
+Hotel: Harbor House. Hotel check-in is at 15:00 on 11 November 2026. Hotel check-out is at 11:00 on 13 November 2026.
+Conference registration opens at 08:30. The first session starts at 09:00 in Hall B.
+Bring photo identification and the registration confirmation. The hotel booking reference is DEMO-SG-218.

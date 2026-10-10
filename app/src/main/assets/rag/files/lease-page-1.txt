@@ -1,0 +1,6 @@
+SAMPLE DOCUMENT — APARTMENT LEASE
+
+Tenant: Alex Chen. Property: 18 Cedar Lane, Apartment 4.
+The lease starts on 1 January 2026 and ends on 31 December 2026.
+Monthly rent is 1,200 dollars. Rent is due on the fifth day of each month.
+The security deposit is 1,200 dollars. Water is included in the rent. The tenant pays for electricity and internet.

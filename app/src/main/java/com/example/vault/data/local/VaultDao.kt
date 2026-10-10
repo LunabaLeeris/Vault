@@ -7,6 +7,7 @@ import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
 import androidx.room.Update
+import androidx.room.Transaction
 import kotlinx.coroutines.flow.Flow
 
 data class FolderWithCount(
@@ -24,6 +25,16 @@ data class DocumentWithTextStatus(
 @Dao
 interface VaultDao {
 
+    @Transaction
+    @Query("SELECT * FROM documents ORDER BY id")
+    suspend fun getDocumentSnapshots(): List<DocumentSnapshot>
+
+    @Query("SELECT * FROM folders WHERE id = :folderId")
+    suspend fun getFolderByIdSync(folderId: Long): FolderEntity?
+
+    @Query("UPDATE documents SET textRevision = textRevision + 1, updatedAt = :updatedAt WHERE id = :documentId")
+    suspend fun incrementTextRevision(documentId: Long, updatedAt: Long = System.currentTimeMillis()): Int
+
     @Query("""
         SELECT f.id, f.name, f.createdAt, COUNT(d.id) AS documentCount
         FROM folders f
@@ -38,6 +49,9 @@ interface VaultDao {
 
     @Query("SELECT * FROM folders WHERE id = :folderId LIMIT 1")
     fun getFolderById(folderId: Long): Flow<FolderEntity?>
+
+    @Query("SELECT * FROM documents WHERE folderId = :folderId ORDER BY id")
+    suspend fun getDocumentsInFolderSync(folderId: Long): List<DocumentEntity>
 
     @Query("SELECT * FROM folders WHERE LOWER(TRIM(name)) = LOWER(TRIM(:name)) LIMIT 1")
     suspend fun findFolderByName(name: String): FolderEntity?
@@ -73,6 +87,9 @@ interface VaultDao {
     @Query("SELECT * FROM documents WHERE id = :documentId LIMIT 1")
     suspend fun getDocumentByIdSync(documentId: Long): DocumentEntity?
 
+    @Query("SELECT * FROM document_pages WHERE id = :pageId")
+    suspend fun getPageByIdSync(pageId: Long): DocumentPageEntity?
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertDocument(document: DocumentEntity): Long
 
@@ -100,6 +117,9 @@ interface VaultDao {
 
     @Query("UPDATE document_pages SET editedText = :editedText, updatedAt = :updatedAt WHERE id = :pageId")
     suspend fun updatePageText(pageId: Long, editedText: String, updatedAt: Long = System.currentTimeMillis()): Int
+
+    @Query("UPDATE document_pages SET translatedText = :translatedText, translatedLanguage = :language, updatedAt = :updatedAt WHERE id = :pageId")
+    suspend fun updateTranslatedPageText(pageId: Long, translatedText: String?, language: String?, updatedAt: Long = System.currentTimeMillis()): Int
 
     @Query("DELETE FROM document_pages WHERE documentId = :documentId")
     suspend fun deletePagesForDocument(documentId: Long): Int

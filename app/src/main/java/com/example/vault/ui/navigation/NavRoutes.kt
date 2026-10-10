@@ -11,8 +11,8 @@ sealed class Screen(val route: String) {
 
     data object SaveDocument : Screen("save_document")
 
-    data object ViewPdf : Screen("view_pdf/{documentId}") {
-        fun createRoute(documentId: Long) = "view_pdf/$documentId"
+    data object ViewPdf : Screen("view_pdf/{documentId}?page={pageNumber}") {
+        fun createRoute(documentId: Long, pageNumber: Int = 1) = "view_pdf/$documentId?page=$pageNumber"
     }
 
     data object ViewImage : Screen("view_image/{documentId}") {

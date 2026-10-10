@@ -1,0 +1,11 @@
+[
+  {"id":"demo-lease","title":"Apartment lease.txt","folderId":"demo-home","folderName":"Home",
+    "pages":[
+      {"number":1,"revision":1,"textAsset":"rag/files/lease-page-1.txt"},
+      {"number":2,"revision":2,"isEdited":true,"textAsset":"rag/files/lease-page-2.txt"}
+    ]},
+  {"id":"demo-warranty","title":"Laptop warranty.txt","folderId":"demo-purchases","folderName":"Purchases",
+    "pages":[{"number":1,"revision":1,"textAsset":"rag/files/warranty-page-1.txt"}]},
+  {"id":"demo-trip","title":"Conference itinerary.txt","folderId":"demo-travel","folderName":"Travel",
+    "pages":[{"number":1,"revision":1,"textAsset":"rag/files/trip-page-1.txt"}]}
+]

@@ -27,6 +27,8 @@ data class DocumentPageEntity(
     val pageNumber: Int,
     val rawText: String,
     val editedText: String? = null,
+    val translatedText: String? = null,
+    val translatedLanguage: String? = null,
     val updatedAt: Long = System.currentTimeMillis()
 ) {
     /**
@@ -34,4 +36,9 @@ data class DocumentPageEntity(
      */
     val content: String
         get() = editedText ?: rawText
+
+    fun searchableContent(preferredLanguage: String? = null): String =
+        if (!preferredLanguage.isNullOrBlank() && translatedLanguage.equals(preferredLanguage, true) && translatedText != null) {
+            translatedText
+        } else content + (translatedText?.let { "\n$it" } ?: "")
 }

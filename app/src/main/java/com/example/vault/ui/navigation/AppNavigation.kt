@@ -6,6 +6,8 @@ import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
@@ -26,6 +28,10 @@ import com.example.vault.ui.vault.VaultViewModel
 import com.example.vault.ui.splash.SplashScreen
 import com.example.vault.ui.viewer.ImageViewerScreen
 import com.example.vault.ui.viewer.PdfViewerScreen
+import com.example.vault.data.repository.VaultRepository
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 @Composable
 fun AppNavigation(
@@ -35,6 +41,8 @@ fun AppNavigation(
     val app = context.applicationContext as Application
     val vaultViewModel: VaultViewModel = viewModel()
     val chatViewModel: ChatViewModel = viewModel()
+    val navigationScope = rememberCoroutineScope()
+    val repository = remember { VaultRepository.getInstance(context) }
 
     NavHost(
         navController = navController,
@@ -91,6 +99,9 @@ fun AppNavigation(
                         navController.navigate(Screen.ViewImage.createRoute(doc.id))
                     }
                 },
+                onOpenSource = { source ->
+                    source.documentId.toLongOrNull()?.let { id -> navigationScope.launch { val doc = withContext(Dispatchers.IO) { repository.findDocument(id) }; if (doc?.mimeType?.contains("pdf", true) == true) navController.navigate(Screen.ViewPdf.createRoute(id, source.pageNumber)) else if (doc != null) navController.navigate(Screen.ViewImage.createRoute(id)) } }
+                },
                 initialTab = "Vault"
             )
         }
@@ -111,6 +122,9 @@ fun AppNavigation(
                     } else {
                         navController.navigate(Screen.ViewImage.createRoute(doc.id))
                     }
+                },
+                onOpenSource = { source ->
+                    source.documentId.toLongOrNull()?.let { id -> navigationScope.launch { val doc = withContext(Dispatchers.IO) { repository.findDocument(id) }; if (doc?.mimeType?.contains("pdf", true) == true) navController.navigate(Screen.ViewPdf.createRoute(id, source.pageNumber)) else if (doc != null) navController.navigate(Screen.ViewImage.createRoute(id)) } }
                 },
                 initialTab = "Chat"
             )
@@ -160,11 +174,12 @@ fun AppNavigation(
 
         composable(
             route = Screen.ViewPdf.route,
-            arguments = listOf(navArgument("documentId") { type = NavType.LongType })
+            arguments = listOf(navArgument("documentId") { type = NavType.LongType }, navArgument("pageNumber") { type = NavType.IntType; defaultValue = 1 })
         ) { backStackEntry ->
             val documentId = backStackEntry.arguments?.getLong("documentId") ?: return@composable
             PdfViewerScreen(
                 documentId = documentId,
+                initialPageNumber = backStackEntry.arguments?.getInt("pageNumber") ?: 1,
                 onNavigateBack = { navController.popBackStack() },
                 onViewText = {
                     navController.navigate(Screen.ViewText.createRoute(documentId))

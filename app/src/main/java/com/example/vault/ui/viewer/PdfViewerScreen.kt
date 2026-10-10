@@ -94,6 +94,7 @@ import kotlinx.coroutines.withContext
 @Composable
 fun PdfViewerScreen(
     documentId: Long,
+    initialPageNumber: Int = 1,
     onNavigateBack: () -> Unit,
     onViewText: () -> Unit
 ) {
@@ -152,7 +153,9 @@ fun PdfViewerScreen(
                 totalPages = renderer.pageCount
 
                 if (totalPages > 0) {
-                    val page = renderer.openPage(0)
+                    val requestedIndex = (initialPageNumber - 1).coerceIn(0, renderer.pageCount - 1)
+                    currentPageIndex = requestedIndex
+                    val page = renderer.openPage(requestedIndex)
                     val targetW = page.width * 2
                     val targetH = page.height * 2
                     val bmp = Bitmap.createBitmap(targetW, targetH, Bitmap.Config.ARGB_8888)
