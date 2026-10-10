@@ -101,12 +101,35 @@ class VaultRepository(
         }
     }
 
+    suspend fun renameFolder(folderId: Long, newName: String): Result<Unit> = withContext(Dispatchers.IO) {
+        val trimmed = newName.trim()
+        if (trimmed.isBlank()) {
+            return@withContext Result.failure(IllegalArgumentException("Folder name cannot be blank"))
+        }
+        val existing = vaultDao.findFolderByName(trimmed)
+        if (existing != null && existing.id != folderId) {
+            return@withContext Result.failure(IllegalArgumentException("A folder named '$trimmed' already exists"))
+        }
+        try {
+            vaultDao.updateFolderName(folderId, trimmed)
+            Result.success(Unit)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
     suspend fun deleteFolder(folderId: Long): Result<Unit> = withContext(Dispatchers.IO) {
         try {
-            val folder = vaultDao.getFolderByIdSync(folderId) ?: error("Folder not found")
-            val files = vaultDao.getDocumentsInFolderSync(folderId).map { it.relativePath }
-            database.withTransaction { vaultDao.deleteFolder(folder) }
-            files.forEach { check(fileStorageManager.deleteFile(it)) { "Folder deleted, but a stored file could not be removed" } }
+            val docs = vaultDao.getDocumentsInFolderSync(folderId)
+            docs.forEach { doc ->
+                fileStorageManager.deleteFile(doc.relativePath)
+            }
+            database.withTransaction {
+                vaultDao.deleteFolderById(folderId)
+                if (vaultDao.getFolderCount() == 0) {
+                    vaultDao.insertFolder(FolderEntity(name = "Inbox"))
+                }
+            }
             Result.success(Unit)
         } catch (e: Exception) {
             Result.failure(e)

@@ -148,6 +148,9 @@ fun FolderDetailScreen(
     var isGridView by remember { mutableStateOf(false) }
     var selectedSort by remember { mutableStateOf(FolderSortOption.DATE_DESC) }
     var showSortMenu by remember { mutableStateOf(false) }
+    var showFolderMenu by remember { mutableStateOf(false) }
+    var showRenameFolderDialog by remember { mutableStateOf(false) }
+    var showDeleteFolderDialog by remember { mutableStateOf(false) }
 
     var documentToRename by remember { mutableStateOf<DocumentEntity?>(null) }
     var documentToDelete by remember { mutableStateOf<DocumentEntity?>(null) }
@@ -265,7 +268,6 @@ fun FolderDetailScreen(
                     // Button 2: Adjust View Button (Toggle List / Grid View)
                     Surface(
                         modifier = Modifier
-                            .padding(end = 12.dp)
                             .size(38.dp)
                             .clip(RoundedCornerShape(10.dp))
                             .clickable { isGridView = !isGridView },
@@ -279,6 +281,78 @@ fun FolderDetailScreen(
                                 contentDescription = if (isGridView) "Switch to List View" else "Switch to Grid View",
                                 tint = if (isDark) SupabaseGreen else SupabaseGreenDarker,
                                 modifier = Modifier.size(19.dp)
+                            )
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.width(8.dp))
+
+                    // Button 3: Folder Options (Rename / Delete)
+                    Box(modifier = Modifier.padding(end = 12.dp)) {
+                        Surface(
+                            modifier = Modifier
+                                .size(38.dp)
+                                .clip(RoundedCornerShape(10.dp))
+                                .clickable { showFolderMenu = true },
+                            shape = RoundedCornerShape(10.dp),
+                            color = if (isDark) VaultDashboardBg else SupabaseGreenSubtle,
+                            border = BorderStroke(1.dp, if (isDark) VaultCardBorderDark else VaultCardBorderLight)
+                        ) {
+                            Box(contentAlignment = Alignment.Center) {
+                                Icon(
+                                    imageVector = Icons.Rounded.MoreHoriz,
+                                    contentDescription = "Folder options",
+                                    tint = if (isDark) SupabaseGreen else SupabaseGreenDarker,
+                                    modifier = Modifier.size(19.dp)
+                                )
+                            }
+                        }
+
+                        DropdownMenu(
+                            expanded = showFolderMenu,
+                            onDismissRequest = { showFolderMenu = false }
+                        ) {
+                            DropdownMenuItem(
+                                text = {
+                                    Text(
+                                        "Rename Folder",
+                                        fontFamily = Manrope,
+                                        fontWeight = FontWeight.Medium
+                                    )
+                                },
+                                leadingIcon = {
+                                    Icon(
+                                        imageVector = Icons.Rounded.Edit,
+                                        contentDescription = null,
+                                        modifier = Modifier.size(18.dp)
+                                    )
+                                },
+                                onClick = {
+                                    showFolderMenu = false
+                                    showRenameFolderDialog = true
+                                }
+                            )
+                            DropdownMenuItem(
+                                text = {
+                                    Text(
+                                        "Delete Folder",
+                                        fontFamily = Manrope,
+                                        fontWeight = FontWeight.Medium,
+                                        color = MaterialTheme.colorScheme.error
+                                    )
+                                },
+                                leadingIcon = {
+                                    Icon(
+                                        imageVector = Icons.Rounded.Delete,
+                                        contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.error,
+                                        modifier = Modifier.size(18.dp)
+                                    )
+                                },
+                                onClick = {
+                                    showFolderMenu = false
+                                    showDeleteFolderDialog = true
+                                }
                             )
                         }
                     }
@@ -440,6 +514,31 @@ fun FolderDetailScreen(
             onConfirm = {
                 viewModel.deleteDocument(doc.id)
                 documentToDelete = null
+            }
+        )
+    }
+
+    if (showRenameFolderDialog && folder != null) {
+        RenameFolderDialog(
+            currentName = folder?.name ?: "",
+            onDismiss = { showRenameFolderDialog = false },
+            onConfirm = { newName ->
+                viewModel.renameFolder(newName)
+                showRenameFolderDialog = false
+            }
+        )
+    }
+
+    if (showDeleteFolderDialog && folder != null) {
+        DeleteFolderDialog(
+            folderName = folder?.name ?: "Folder",
+            documentCount = documents.size,
+            onDismiss = { showDeleteFolderDialog = false },
+            onConfirm = {
+                showDeleteFolderDialog = false
+                viewModel.deleteFolder {
+                    onNavigateBack()
+                }
             }
         )
     }
