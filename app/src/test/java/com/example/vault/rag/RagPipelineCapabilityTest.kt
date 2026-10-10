@@ -108,6 +108,32 @@ class RagPipelineCapabilityTest {
         assertTrue(result.references.none { it.chunk.documentId == "3" })
     }
 
+    @Test fun searchDocumentsFindsDocByBodyContentWhenTitleDoesNotMatch() = runBlocking {
+        val docs = listOf(
+            RagDocument("101", "Untitled Scan 01", "inbox", "Inbox", listOf(TextPage(1, "Laboratory Report Hemoglobin 14.5 normal range", 1))),
+            RagDocument("102", "Receipt 4981", "inbox", "Inbox", listOf(TextPage(1, "Total: 1200 PHP paid in cash at supermarket", 1))),
+        )
+        val index = HybridSimulatedIndex()
+        val pipe = RagPipeline(MemorySource(docs), index)
+        // Search by body term "Hemoglobin" which does not appear in "Untitled Scan 01"
+        val results = pipe.searchDocuments("Hemoglobin")
+        assertEquals(1, results.size)
+        assertEquals("101", results[0].document.id)
+        assertTrue(results[0].matchingSnippet?.contains("Hemoglobin") == true)
+    }
+
+    @Test fun searchDocumentsMatchesTitleAndFolderDirectly() = runBlocking {
+        val docs = listOf(
+            RagDocument("201", "Passport Copy", "personal", "Personal", listOf(TextPage(1, "Government document photo", 1))),
+            RagDocument("202", "Tax Form", "finance", "Finance", listOf(TextPage(1, "Annual income tax return", 1))),
+        )
+        val index = HybridSimulatedIndex()
+        val pipe = RagPipeline(MemorySource(docs), index)
+        val results = pipe.searchDocuments("Passport")
+        assertEquals(1, results.size)
+        assertEquals("201", results[0].document.id)
+    }
+
     private fun pipeline(index: RetrievalIndex): RagPipeline = RagPipeline(MemorySource(documents), index)
 
     private class MemorySource(private val documents: List<RagDocument>) : DocumentSource {

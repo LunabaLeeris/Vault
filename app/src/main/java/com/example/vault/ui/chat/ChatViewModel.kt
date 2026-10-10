@@ -44,7 +44,7 @@ data class ChatSession(val id: String = UUID.randomUUID().toString(), val title:
 
 class ChatViewModel(application: Application) : AndroidViewModel(application) {
     private val repository = VaultRepository.getInstance(application)
-    private val dependencies = RagDependencies(application)
+    private val dependencies = RagDependencies.getInstance(application)
     private val syncCoordinator = RagSyncCoordinator(repository, dependencies.pipeline, viewModelScope)
     private val _chatSessions = MutableStateFlow<List<ChatSession>>(emptyList())
     val chatSessions: StateFlow<List<ChatSession>> = _chatSessions.asStateFlow()

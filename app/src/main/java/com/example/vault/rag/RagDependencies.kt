@@ -22,4 +22,13 @@ class RagDependencies(context: Context, source: DocumentSource = RoomDocumentSou
         (index as? AutoCloseable)?.close()
         (modelGenerator as? AutoCloseable)?.close()
     }
+    companion object {
+        @Volatile
+        private var INSTANCE: RagDependencies? = null
+
+        fun getInstance(context: Context): RagDependencies =
+            INSTANCE ?: synchronized(this) {
+                INSTANCE ?: RagDependencies(context.applicationContext).also { INSTANCE = it }
+            }
+    }
 }

@@ -73,6 +73,10 @@ class VaultRepository(
 
     suspend fun findDocument(documentId: Long): DocumentEntity? = vaultDao.getDocumentByIdSync(documentId)
 
+    suspend fun getAllDocumentsSync(): List<DocumentEntity> = withContext(Dispatchers.IO) {
+        vaultDao.getAllDocumentsSync()
+    }
+
     suspend fun readDocumentSnapshot() = vaultDao.getDocumentSnapshots()
 
     fun observeDocumentChanges(): Flow<Unit> = callbackFlow {

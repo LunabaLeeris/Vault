@@ -168,9 +168,11 @@ fun VaultScreen(
     val folders by viewModel.foldersWithCount.collectAsState()
     val recentDocuments by viewModel.recentDocuments.collectAsState()
     val userMessage by viewModel.userMessage.collectAsState()
+    val searchQuery by viewModel.searchQuery.collectAsState()
+    val isSearching by viewModel.isSearching.collectAsState()
+    val ragSearchResults by viewModel.ragSearchResults.collectAsState()
     val snackbarHostState = remember { SnackbarHostState() }
 
-    var searchQuery by remember { mutableStateOf("") }
     var showCreateFolderDialog by remember { mutableStateOf(false) }
     var folderToRename by remember { mutableStateOf<FolderWithCount?>(null) }
     var folderToDelete by remember { mutableStateOf<FolderWithCount?>(null) }
@@ -263,15 +265,18 @@ fun VaultScreen(
         }
     }
 
-    // Filtered lists
-    val filteredFolders = remember(folders, searchQuery) {
+    // Filtered lists with RAG content retrieval
+    val filteredFolders = remember(folders, searchQuery, ragSearchResults) {
         if (searchQuery.isBlank()) folders
-        else folders.filter { it.name.contains(searchQuery.trim(), ignoreCase = true) }
+        else folders.filter { folder ->
+            folder.name.contains(searchQuery.trim(), ignoreCase = true) ||
+            ragSearchResults.any { it.first.folderId == folder.id }
+        }
     }
 
-    val filteredRecent = remember(recentDocuments, searchQuery) {
-        if (searchQuery.isBlank()) recentDocuments
-        else recentDocuments.filter { it.title.contains(searchQuery.trim(), ignoreCase = true) }
+    val filteredRecent = remember(recentDocuments, searchQuery, ragSearchResults) {
+        if (searchQuery.isBlank()) recentDocuments.map { it to null }
+        else ragSearchResults
     }
 
     // File Counts and Storage Calculation
@@ -396,10 +401,10 @@ fun VaultScreen(
                 ) {
                     OutlinedTextField(
                         value = searchQuery,
-                        onValueChange = { searchQuery = it },
+                        onValueChange = { viewModel.setSearchQuery(it) },
                         placeholder = {
                             Text(
-                                "Search files, folders...",
+                                "Search file contents, folders...",
                                 fontFamily = Manrope,
                                 fontSize = 14.sp,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f)
@@ -414,8 +419,14 @@ fun VaultScreen(
                             )
                         },
                         trailingIcon = {
-                            if (searchQuery.isNotEmpty()) {
-                                IconButton(onClick = { searchQuery = "" }) {
+                            if (isSearching) {
+                                CircularProgressIndicator(
+                                    modifier = Modifier.size(18.dp),
+                                    strokeWidth = 2.dp,
+                                    color = if (isDark) SupabaseGreen else SupabaseGreenDarker
+                                )
+                            } else if (searchQuery.isNotEmpty()) {
+                                IconButton(onClick = { viewModel.setSearchQuery("") }) {
                                     Icon(
                                         imageVector = Icons.Rounded.Clear,
                                         contentDescription = "Clear search",
@@ -504,7 +515,7 @@ fun VaultScreen(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
-                        text = "Recent Files",
+                        text = if (searchQuery.isNotBlank()) "Matching Files" else "Recent Files",
                         style = MaterialTheme.typography.titleMedium.copy(
                             fontFamily = Manrope,
                             fontWeight = FontWeight.ExtraBold,
@@ -513,7 +524,13 @@ fun VaultScreen(
                         color = MaterialTheme.colorScheme.onBackground
                     )
                     Text(
-                        text = if (filteredRecent.isEmpty()) "0 files" else "${filteredRecent.size} files",
+                        text = if (isSearching) {
+                            "Searching..."
+                        } else if (filteredRecent.isEmpty()) {
+                            "0 files"
+                        } else {
+                            "${filteredRecent.size} files"
+                        },
                         style = MaterialTheme.typography.bodySmall.copy(
                             fontWeight = FontWeight.Bold,
                             fontSize = 12.sp
@@ -530,15 +547,23 @@ fun VaultScreen(
                 ) {
                     if (filteredRecent.isEmpty()) {
                         item {
-                            EmptyRecentPlaceholder(
-                                isDark = isDark,
-                                onScanClick = { triggerScan() }
-                            )
+                            if (searchQuery.isNotBlank()) {
+                                EmptySearchPlaceholder(
+                                    isDark = isDark,
+                                    query = searchQuery
+                                )
+                            } else {
+                                EmptyRecentPlaceholder(
+                                    isDark = isDark,
+                                    onScanClick = { triggerScan() }
+                                )
+                            }
                         }
                     } else {
-                        items(filteredRecent, key = { it.id }) { doc ->
+                        items(filteredRecent, key = { it.first.id }) { (doc, snippet) ->
                             RecentFileHorizontalCard(
                                 document = doc,
+                                matchingSnippet = snippet,
                                 isDark = isDark,
                                 onClick = { onOpenDocument(doc) }
                             )
@@ -1167,6 +1192,7 @@ fun DocumentThumbnail(
 fun RecentFileHorizontalCard(
     document: DocumentEntity,
     isDark: Boolean,
+    matchingSnippet: String? = null,
     onClick: () -> Unit
 ) {
     val isPdf = document.mimeType.contains("pdf", ignoreCase = true)
@@ -1188,7 +1214,7 @@ fun RecentFileHorizontalCard(
 
     Surface(
         modifier = Modifier
-            .width(150.dp)
+            .width(if (matchingSnippet != null) 175.dp else 150.dp)
             .clip(RoundedCornerShape(16.dp))
             .clickable(onClick = onClick),
         shape = RoundedCornerShape(16.dp),
@@ -1249,6 +1275,21 @@ fun RecentFileHorizontalCard(
                 overflow = TextOverflow.Ellipsis
             )
 
+            if (!matchingSnippet.isNullOrBlank()) {
+                Spacer(modifier = Modifier.height(3.dp))
+                Text(
+                    text = matchingSnippet,
+                    fontFamily = Manrope,
+                    style = MaterialTheme.typography.bodySmall.copy(
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Medium
+                    ),
+                    color = if (isDark) SupabaseGreen else SupabaseGreenDarker,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+
             Spacer(modifier = Modifier.height(2.dp))
 
             Text(
@@ -1259,6 +1300,66 @@ fun RecentFileHorizontalCard(
                 ),
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
+        }
+    }
+}
+
+@Composable
+fun EmptySearchPlaceholder(
+    isDark: Boolean,
+    query: String
+) {
+    Surface(
+        modifier = Modifier
+            .width(280.dp)
+            .clip(RoundedCornerShape(16.dp)),
+        shape = RoundedCornerShape(16.dp),
+        color = MaterialTheme.colorScheme.surface,
+        border = BorderStroke(
+            1.dp,
+            if (isDark) VaultCardBorderDark else VaultCardBorderLight
+        )
+    ) {
+        Row(
+            modifier = Modifier.padding(16.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Surface(
+                modifier = Modifier.size(46.dp),
+                shape = RoundedCornerShape(12.dp),
+                color = if (isDark) Color(0xFF262626) else Color(0xFFF1F5F9)
+            ) {
+                Box(contentAlignment = Alignment.Center) {
+                    Icon(
+                        imageVector = Icons.Rounded.Search,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.size(24.dp)
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.width(14.dp))
+
+            Column {
+                Text(
+                    text = "No content found",
+                    style = MaterialTheme.typography.titleSmall.copy(
+                        fontWeight = FontWeight.Bold
+                    ),
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+                Spacer(modifier = Modifier.height(2.dp))
+                Text(
+                    text = "No docs match \"$query\"",
+                    style = MaterialTheme.typography.bodySmall.copy(
+                        fontSize = 11.sp
+                    ),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
         }
     }
 }

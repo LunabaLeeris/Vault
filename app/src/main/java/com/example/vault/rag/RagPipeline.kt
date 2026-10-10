@@ -300,9 +300,79 @@ class RagPipeline(
         }
     }
 
+    suspend fun searchDocuments(query: String, scope: SearchScope = SearchScope.All, limit: Int = 30): List<RagSearchResult> = withContext(Dispatchers.Default) {
+        mutex.withLock {
+            val documents = synchronize()
+            val trimmed = query.trim()
+            if (trimmed.isBlank() || documents.isEmpty()) return@withLock emptyList()
+            val chunkHits = index.search(trimmed, scope, config.maxVectorCandidates)
+            val documentsById = documents.associateBy { it.id }
+            val terms = KeywordQuery.terms(trimmed)
+            val hasKeywordHits = terms.isNotEmpty() && chunkHits.any {
+                KeywordQuery.lexicalScore(it.text, it.title, terms) >= 0.15f
+            }
+
+            val matchedFromChunks = chunkHits
+                .groupBy { it.documentId }
+                .mapNotNull { (documentId, hits) ->
+                    val document = documentsById[documentId] ?: return@mapNotNull null
+                    val best = hits.maxOf { it.similarity }
+                    val score = best + (ln(hits.size.toDouble() + 1.0) * 0.015).toFloat()
+                    val bestHit = hits.maxBy { it.similarity }
+                    Triple(document, score, bestHit)
+                }
+                .filter { match ->
+                    if (terms.isNotEmpty()) {
+                        val lexScore = KeywordQuery.lexicalScore(match.third.text, match.first.title, terms)
+                        if (hasKeywordHits) {
+                            lexScore >= 0.15f && match.second >= config.minimumVectorSimilarity
+                        } else {
+                            match.second >= maxOf(config.minimumVectorSimilarity, 0.60f)
+                        }
+                    } else {
+                        match.second >= maxOf(config.minimumVectorSimilarity, 0.60f)
+                    }
+                }
+
+            val chunkDocIds = matchedFromChunks.map { it.first.id }.toSet()
+            val titleMatches = documents.filter { doc ->
+                doc.id !in chunkDocIds && inScope(doc, scope) && (
+                    doc.title.contains(trimmed, ignoreCase = true) ||
+                    doc.folderName.contains(trimmed, ignoreCase = true) ||
+                    (terms.isNotEmpty() && KeywordQuery.lexicalScore("", doc.title, terms) >= 0.20f)
+                )
+            }.map { doc ->
+                Triple(doc, 0.75f, null as ReferenceChunk?)
+            }
+
+            val allRanked = (matchedFromChunks + titleMatches)
+                .sortedByDescending { it.second }
+                .distinctBy { doc ->
+                    val contentKey = doc.first.pages.map { it.searchable(null).trim() }.joinToString(" ")
+                    "${doc.first.title.trim().lowercase(Locale.ROOT)}::$contentKey"
+                }
+                .take(limit)
+
+            allRanked.map { (doc, score, bestHit) ->
+                val snippet = bestHit?.let { hit ->
+                    val text = hit.text.trim().replace("\n", " ")
+                    if (text.length > 120) text.take(117) + "..." else text
+                }
+                RagSearchResult(doc, score, bestHit, snippet)
+            }
+        }
+    }
+
     suspend fun openSource(chunk: ReferenceChunk): SourcePage? = withContext(Dispatchers.IO) {
         val document = source.findDocument(chunk.documentId) ?: return@withContext null
         val page = document.pages.find { it.number == chunk.pageNumber }
         SourcePage(document, chunk.pageNumber, page, page == null || page.revision != chunk.revision)
     }
 }
+
+data class RagSearchResult(
+    val document: RagDocument,
+    val score: Float,
+    val bestChunk: ReferenceChunk? = null,
+    val matchingSnippet: String? = null
+)

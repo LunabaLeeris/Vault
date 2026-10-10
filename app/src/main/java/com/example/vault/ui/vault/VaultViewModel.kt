@@ -8,6 +8,10 @@ import com.example.vault.data.local.FolderEntity
 import com.example.vault.data.local.FolderWithCount
 import com.example.vault.data.repository.PendingDocument
 import com.example.vault.data.repository.VaultRepository
+import com.example.vault.rag.RagDependencies
+import com.example.vault.rag.RagSyncCoordinator
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -25,6 +29,19 @@ data class VaultUiState(
 class VaultViewModel(application: Application) : AndroidViewModel(application) {
 
     val repository: VaultRepository = VaultRepository.getInstance(application)
+    private val dependencies = RagDependencies.getInstance(application)
+    private val syncCoordinator = RagSyncCoordinator(repository, dependencies.pipeline, viewModelScope)
+
+    private val _searchQuery = MutableStateFlow("")
+    val searchQuery: StateFlow<String> = _searchQuery.asStateFlow()
+
+    private val _isSearching = MutableStateFlow(false)
+    val isSearching: StateFlow<Boolean> = _isSearching.asStateFlow()
+
+    private val _ragSearchResults = MutableStateFlow<List<Pair<DocumentEntity, String?>>>(emptyList())
+    val ragSearchResults: StateFlow<List<Pair<DocumentEntity, String?>>> = _ragSearchResults.asStateFlow()
+
+    private var searchJob: Job? = null
 
     private val _userMessage = MutableStateFlow<String?>(null)
     val userMessage: StateFlow<String?> = _userMessage.asStateFlow()
@@ -62,6 +79,37 @@ class VaultViewModel(application: Application) : AndroidViewModel(application) {
 
     fun showMessage(msg: String) {
         _userMessage.value = msg
+    }
+
+    fun setSearchQuery(query: String) {
+        _searchQuery.value = query
+        searchJob?.cancel()
+        if (query.isBlank()) {
+            _ragSearchResults.value = emptyList()
+            _isSearching.value = false
+            return
+        }
+        searchJob = viewModelScope.launch {
+            _isSearching.value = true
+            delay(150)
+            try {
+                val results = dependencies.pipeline.searchDocuments(query.trim())
+                val allDocs: Map<String, DocumentEntity> = repository.getAllDocumentsSync().associateBy { it.id.toString() }
+                val mapped: List<Pair<DocumentEntity, String?>> = results.mapNotNull { result ->
+                    val entity = allDocs[result.document.id] ?: return@mapNotNull null
+                    entity to result.matchingSnippet
+                }
+                _ragSearchResults.value = mapped
+            } catch (_: Exception) {
+                val allDocs: List<DocumentEntity> = repository.getAllDocumentsSync()
+                val fallback: List<Pair<DocumentEntity, String?>> = allDocs
+                    .filter { it.title.contains(query.trim(), ignoreCase = true) }
+                    .map { it to null }
+                _ragSearchResults.value = fallback
+            } finally {
+                _isSearching.value = false
+            }
+        }
     }
 
     fun createFolder(name: String, onCreated: ((Long) -> Unit)? = null) {
